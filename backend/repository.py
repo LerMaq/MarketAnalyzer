@@ -1,28 +1,31 @@
 from sqlalchemy import select
-
-from database import new_session, ProductOrm
-from schemas import SProductAdd, SProduct
+from sqlalchemy.orm import selectinload
+from database import new_session, ProductOrm, ReviewOrm, ProductMetricOrm, AiSummaryOrm
 
 
 class ProductRepository:
     @classmethod
-    async def add_one(cls, data: SProductAdd) -> int:
+    async def check_existence(cls, ozon_id: int):
         async with new_session() as session:
-            product_dict = data.model_dump()
-
-            product = ProductOrm(**product_dict)
-            session.add(product)
-
-            await session.flush()
-            await session.commit()
-            return product.id
-
+            query = select(ProductOrm).where(ProductOrm.ozon_id == ozon_id)
+            result = await session.execute(query)
+            product = result.scalar_one_or_none()
+            if product:
+                return {"exists": True, "date_added": product.date_added, "ozon_id": ozon_id}
+            return {"exists": False, "date_added": None, "ozon_id": ozon_id}
 
     @classmethod
-    async def find_all(cls) -> list[SProduct]:
+    async def get_full_report(cls, ozon_id: int):
         async with new_session() as session:
-            query = select(ProductOrm)
+            query = (
+                select(ProductOrm)
+                .where(ProductOrm.ozon_id == ozon_id)
+                .options(
+                    selectinload(ProductOrm.reviews),
+                    selectinload(ProductOrm.metrics),
+                    selectinload(ProductOrm.summary)
+                )
+            )
             result = await session.execute(query)
-            product_models = result.scalars().all()
-            product_schemas = [SProduct.model_validate(product_model) for product_model in product_models]
-            return product_schemas
+            product = result.scalar_one_or_none()
+            return product

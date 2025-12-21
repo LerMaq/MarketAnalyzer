@@ -1,17 +1,32 @@
-from typing import Optional
 from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
 
-
-class SProductAdd(BaseModel): # Для ввода в БД (чтобы не указывать id)
-    name: str
-    description: Optional[str] = None
+# Для проверки наличия
+class SProductCheck(BaseModel):
+    exists: bool
+    date_added: Optional[datetime] = None
     ozon_id: int
 
+# Для запроса на анализ
+class SAnalyzeRequest(BaseModel):
+    url_or_id: str
 
-class SProduct(SProductAdd): # Для вывода из БД (чтобы был id на выходе)
-    id: int
+# Для отчета (то, что друг будет выводить на экран)
+class SReviewSchema(BaseModel):
+    text: str
+    rating: int
+    author_name: str
+    review_date: str
 
+class SMetricSchema(BaseModel):
+    name: str
+    score: int
+    explanation: str
 
-class SProductId(BaseModel): # Для ответа на запрос о добавлении товара
-    ok: bool = True
-    product_id: int
+class SFullReport(BaseModel):
+    ozon_id: int
+    name: str
+    ai_summary: str
+    metrics: List[SMetricSchema]
+    reviews: List[SReviewSchema]

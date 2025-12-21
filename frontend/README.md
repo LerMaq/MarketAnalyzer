@@ -31,6 +31,12 @@ npm install
 npm run dev
 ```
 
+### Run local network
+
+```sh
+npm run dev -- --host 0.0.0.0
+```
+
 ### Compile and Minify for Production
 
 ```sh
