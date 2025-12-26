@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from database import create_tables, delete_tables
-from router import router as products_router
+from app.database import create_tables, delete_tables
+from app.routes import products_router
 
 
 @asynccontextmanager
