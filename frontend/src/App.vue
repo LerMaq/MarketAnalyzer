@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onUnmounted, computed } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import axios from 'axios';
 
 /**
@@ -20,6 +20,10 @@ const error = ref(null);
 // Данные отчета и проверки
 const report = ref(null);
 const checkInfo = ref(null); // Хранит { exists, date_added, ozon_id }
+
+// Модальное окно для метрик
+const isMetricModalVisible = ref(false);
+const selectedMetric = ref(null);
 
 // Чат-бот
 const question = ref('');
@@ -110,6 +114,17 @@ const fetchFullReport = async () => {
   }
 };
 
+// Логика модального окна метрик
+const openMetricModal = (metric) => {
+  selectedMetric.value = metric;
+  isMetricModalVisible.value = true;
+};
+
+const closeMetricModal = () => {
+  isMetricModalVisible.value = false;
+  selectedMetric.value = null;
+};
+
 // ЧАТ-БОТ
 const askAI = async () => {
   if (!question.value || isSendingChat.value) return;
@@ -140,6 +155,7 @@ const reset = () => {
   checkInfo.value = null;
   chatHistory.value = [];
   urlOrId.value = '';
+  closeMetricModal();
 };
 
 onUnmounted(stopPolling);
@@ -154,6 +170,7 @@ onUnmounted(stopPolling);
 
     <main class="container">
       
+      <!-- HOME VIEW -->
       <section v-if="view === 'home'" class="fade-in">
         <div class="hero">
           <h1>Глубокий анализ товаров</h1>
@@ -176,21 +193,23 @@ onUnmounted(stopPolling);
         <div v-if="checkInfo?.exists" class="modal">
           <div class="modal-content">
             <h3>Товар уже анализировался</h3>
-            <p>Последнее обновление: <strong>{{ checkInfo.date_added }}</strong></p>
+            <p>Последнее обновление: <strong>{{ new Date(checkInfo.date_added).toLocaleString() }}</strong></p>
             <div class="modal-actions">
-              <button class="btn-secondary" @click="fetchFullReport">Посмотреть готовый</button>
-              <button class="btn-primary" @click="startAnalysis">Обновить анализ</button>
+              <button @click="fetchFullReport">Посмотреть готовый</button>
+              <button @click="startAnalysis">Обновить анализ</button>
             </div>
           </div>
         </div>
       </section>
 
+      <!-- LOADING VIEW -->
       <section v-if="view === 'loading'" class="loading-state fade-in">
         <div class="spinner"></div>
         <h2>ИИ читает отзывы...</h2>
         <p>Это может занять от 20 до 60 секунд. Мы сообщим, как только отчет будет готов.</p>
       </section>
 
+      <!-- REPORT VIEW -->
       <section v-if="view === 'report' && report" class="report-view fade-in">
         <div class="report-layout">
           
@@ -200,19 +219,31 @@ onUnmounted(stopPolling);
 
             <div class="card ai-summary">
               <h3><span class="icon">✨</span> Резюме нейросети</h3>
-              <p>{{ report.ai_summary }}</p>
+              <p>{{ report.summary.text }}</p>
+            </div>
+
+            <div class="card overall-score-card">
+              <h3><span class="icon">🏆</span> Общая оценка товара</h3>
+              <div class="score-display">
+                <span class="score-value">{{ report.score }}</span>
+                <span class="score-max">/ 100</span>
+              </div>
+              <p class="score-description">
+                Итоговый балл, основанный на анализе всех метрик и их весов.
+              </p>
             </div>
 
             <div class="metrics-grid">
-              <div v-for="m in report.metrics" :key="m.metric_name" class="metric-card">
+              <div v-for="pm in report.product_metrics" :key="pm.metric.name" class="metric-card">
                 <div class="metric-head">
-                  <span class="m-name">{{ m.metric_name }}</span>
-                  <span class="m-score">{{ m.score }}/100</span>
+                  <span class="m-name">{{ pm.metric.name }}</span>
+                  <span class="info-icon" @click="openMetricModal(pm.metric)">i</span>
+                  <span class="m-score">{{ pm.score }}/100</span>
                 </div>
                 <div class="progress-bar">
-                  <div class="fill" :style="{ width: m.score + '%' }"></div>
+                  <div class="fill" :style="{ width: pm.score + '%' }"></div>
                 </div>
-                <p class="m-explain">{{ m.explanation }}</p>
+                <p class="m-explain">{{ pm.explanation }}</p>
               </div>
             </div>
           </div>
@@ -239,12 +270,24 @@ onUnmounted(stopPolling);
         </div>
       </section>
 
+      <!-- METRIC DETAIL MODAL -->
+      <div v-if="isMetricModalVisible && selectedMetric" class="modal" @click.self="closeMetricModal">
+        <div class="modal-content metric-modal-content">
+          <button class="close-btn" @click="closeMetricModal">×</button>
+          <h3>{{ selectedMetric.name }}</h3>
+          <div class="metric-details">
+            <p><strong>Описание:</strong> {{ selectedMetric.description }}</p>
+            <p><strong>Влияние метрики:</strong> {{ selectedMetric.weight }}</p>
+            <p><strong>Метрика подтверждена модераторами:</strong> {{ selectedMetric.is_custom ? 'Нет' : 'Да' }}</p>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 </template>
 
 <style scoped>
-/* Стилизация в стиле современного дашборда */
 .app-wrapper {
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #2c3e50;
@@ -308,13 +351,60 @@ button:disabled { background: #a0c4ff; }
 
 /* Модалка */
 .modal {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
 .modal-content {
-  background: white; padding: 2rem; border-radius: 16px; max-width: 400px; text-align: center;
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  max-width: 450px;
+  width: 90%;
+  text-align: center;
+  position: relative;
 }
-.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: center;
+}
+.modal-actions button {
+  flex: 1;
+}
+
+/* Metric Modal Specifics */
+.metric-modal-content {
+  text-align: left;
+}
+.metric-details p {
+  margin: 10px 0;
+  line-height: 1.6;
+}
+.metric-details strong {
+  color: #005bff;
+}
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
 
 /* Лоадер */
 .loading-state { text-align: center; margin-top: 10rem; }
@@ -328,8 +418,72 @@ button:disabled { background: #a0c4ff; }
 .card { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
 .ai-summary { background: #eef5ff; border-left: 5px solid #005bff; }
 
+/* Overall Score Card */
+.overall-score-card {
+  text-align: center;
+  padding: 25px;
+}
+.score-display {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  margin: 10px 0;
+}
+.score-value {
+  font-size: 4rem;
+  font-weight: 800;
+  color: #005bff;
+}
+.score-max {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #a0c4ff;
+  margin-left: 5px;
+}
+.score-description {
+  font-size: 0.9rem;
+  color: #888;
+  margin: 0;
+}
+
 /* Метрики */
 .metric-card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #eee; }
+.metric-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.m-name {
+  font-weight: 600;
+  color: #333;
+  flex-grow: 1;
+}
+.info-icon {
+  font-size: 0.9rem;
+  font-weight: bold;
+  font-style: italic;
+  color: #888;
+  cursor: pointer;
+  margin-left: 8px;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background-color 0.2s;
+}
+.info-icon:hover {
+  background-color: #eee;
+}
+.m-score {
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: #005bff;
+  margin-left: 15px;
+}
 .progress-bar { background: #eee; height: 8px; border-radius: 4px; margin: 10px 0; overflow: hidden; }
 .fill { background: #00c853; height: 100%; border-radius: 4px; }
 

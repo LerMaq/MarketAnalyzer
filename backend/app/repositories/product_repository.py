@@ -1,32 +1,29 @@
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.database import new_session
 from app.models.product import Product
-
+from typing import Optional
 
 class ProductRepository:
-    @classmethod
-    async def check_existence(cls, ozon_id: int):
-        async with new_session() as session:
-            query = select(Product).where(Product.ozon_id == ozon_id)
-            result = await session.execute(query)
-            product = result.scalar_one_or_none()
-            if product:
-                return {"exists": True, "date_added": product.date_added, "ozon_id": ozon_id}
-            return {"exists": False, "date_added": None, "ozon_id": ozon_id}
+    def __init__(self, db: AsyncSession):
+        self.db = db
 
-    @classmethod
-    async def get_full_report(cls, ozon_id: int):
-        async with new_session() as session:
-            query = (
-                select(Product)
-                .where(Product.ozon_id == ozon_id)
-                .options(
-                    selectinload(Product.reviews),
-                    selectinload(Product.metrics),
-                    selectinload(Product.summary)
-                )
+    async def get_by_ozon_id_light(self, ozon_id: int) -> Optional[Product]:
+        """Только данные самого товара без связей (быстрый запрос)"""
+        query = select(Product).where(Product.ozon_id == ozon_id)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_by_ozon_id_full(self, ozon_id: int) -> Optional[Product]:
+        """Товар со всеми связями для полного отчета"""
+        query = (
+            select(Product)
+            .where(Product.ozon_id == ozon_id)
+            .options(
+                selectinload(Product.reviews),
+                selectinload(Product.product_metrics),
+                selectinload(Product.summary)
             )
-            result = await session.execute(query)
-            product = result.scalar_one_or_none()
-            return product
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()

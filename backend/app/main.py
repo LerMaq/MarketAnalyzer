@@ -7,8 +7,9 @@ from app.routes import products_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await create_tables()
-    print("База создана")
+    # await delete_tables(); print("База удалена")
+    await create_tables(); print("База создана")
+
     yield
     print("Выключение")
 

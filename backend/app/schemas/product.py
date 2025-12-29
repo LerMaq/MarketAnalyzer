@@ -1,9 +1,39 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
 from datetime import datetime
 
-class SProductCheck(BaseModel):
-    """Схема для быстрой проверки: есть товар в БД или нет"""
-    exists: bool
-    date_added: Optional[datetime] = None
+from app.schemas.ai_summary import SAiSummary
+from app.schemas.metric import SProductMetricCreate, SProductMetric
+from app.schemas.review import SReviewCreate, SReview
+
+
+class SProductBase(BaseModel):
+    id: Optional[int] = None
+    name: Optional[str] = None
     ozon_id: int
+    date_added: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SProductFull(SProductBase):
+    """Полные данные о товаре для чтения"""
+    summary: SAiSummary
+    product_metrics: List[SProductMetric]
+    reviews: List[SReview]
+    score: float
+
+
+
+class SProductCheck(SProductBase):
+    """Быстрая проверка: есть ли товар"""
+    exists: bool
+
+
+class SProductCreate(BaseModel):
+    """Что присылает скрапер при создании/обновлении товара"""
+    name: str
+    ozon_id: int
+    ai_summary: str
+    product_metrics: List[SProductMetricCreate]
+    reviews: List[SReviewCreate]

@@ -13,7 +13,7 @@ class Product(Base):
     date_added: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     reviews: Mapped[List["Review"]] = relationship()
-    metrics: Mapped[List["ProductMetric"]] = relationship()
+    product_metrics: Mapped[List["ProductMetric"]] = relationship()
     summary: Mapped["AiSummary"] = relationship(uselist=False)
 
     def __repr__(self):

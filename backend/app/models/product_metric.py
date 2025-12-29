@@ -11,7 +11,7 @@ class ProductMetric(Base):
     explanation: Mapped[str]
 
     # Для легкого доступа к имени метрики
-    metric_info: Mapped["Metric"] = relationship(lazy="joined")
+    metric: Mapped["Metric"] = relationship(lazy="joined")
 
     def __repr__(self):
         return f"<Metric(id={self.id}, product_id='{self.product_id}', metric_id={self.metric_id}, score={self.score}', explanation={self.explanation}')>"

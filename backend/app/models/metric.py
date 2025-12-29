@@ -6,6 +6,7 @@ class Metric(Base):
     __tablename__ = "metrics"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
+    description: Mapped[str]
     weight: Mapped[float]
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False)
 
