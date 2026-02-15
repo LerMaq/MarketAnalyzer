@@ -1,13 +1,13 @@
-from .product import SProductCheck, SProductFull, SProductCreate
+from .product import SProductCheck, SProductFull, SProductCreate, SProductVersion, SProductVersionsList
 from .review import SReview, SReviewCreate
 from .metric import SProductMetric, SProductMetricCreate
-from .analyze import SAnalyzeRequest
 from .ai_summary import SAiSummary, SAiSummaryCreate
+from .task import STask, STaskAdd, STaskWorkerTake, STaskWorkerData, STaskAddedResponse
 
 __all__ = [
-    "SProductCheck", "SProductFull", "SProductCreate",
+    "SProductCheck", "SProductFull", "SProductCreate", "SProductVersion", "SProductVersionsList",
     "SReview", "SReviewCreate",
     "SProductMetric", "SProductMetricCreate",
-    "SAnalyzeRequest",
-    "SAiSummary", "SAiSummaryCreate"
+    "SAiSummary", "SAiSummaryCreate",
+    "STask", "STaskAdd", "STaskWorkerTake", "STaskWorkerData", "STaskAddedResponse"
 ]

@@ -37,3 +37,16 @@ class SProductCreate(BaseModel):
     ai_summary: str
     product_metrics: List[SProductMetricCreate]
     reviews: List[SReviewCreate]
+
+
+class SProductVersion(BaseModel):
+    """Краткая информация о версии товара"""
+    id: int
+    date_added: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SProductVersionsList(BaseModel):
+    ozon_id: int
+    versions: list[SProductVersion]
