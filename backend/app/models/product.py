@@ -48,8 +48,8 @@ class Metric(Base):
     __tablename__ = "metrics"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
-    description: Mapped[str]
-    weight: Mapped[float]
+    description: Mapped[Optional[str]]
+    weight: Mapped[float] = mapped_column(default=1.0)
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False)
 
     def __repr__(self):

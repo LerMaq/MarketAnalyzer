@@ -1,15 +1,17 @@
 from typing import Optional
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories import TaskRepository
+from app.services import AIService, ProductService
 from app.utils import extract_ozon_id
-from app.schemas import STask, STaskAddedResponse, STaskWorkerTake
+from app.schemas import STask, STaskAddedResponse, STaskWorkerTake, STaskWorkerData
 
 
 class TaskService:
     def __init__(self, db: AsyncSession):
         self.task_repo = TaskRepository(db)
+        self.db = db
 
     async def add_new_task(self, url_or_id: str) -> STaskAddedResponse:
         try:
@@ -36,3 +38,31 @@ class TaskService:
             return None
         await self.task_repo.update_status(task.id, "processing")
         return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+
+    async def run_ai_analysis_and_finalize(self, task_id: int, worker_data: STaskWorkerData):
+        """Выполняется в фоне после ответа воркеру"""
+        task = await self.task_repo.get_by_id(task_id)
+        if not task:
+            return
+
+        ai_service = AIService(self.db)
+        product_service = ProductService(self.db)
+
+        try:
+            # 1. Получаем строго валидированный JSON через каскад попыток
+            ai_result = await ai_service.get_report_completion(worker_data.raw_content)
+
+            # 2. Сохраняем продукт (передаем и сырой текст, и объект анализа)
+            product = await product_service.create_full_product(
+                ozon_id=task.ozon_id,
+                raw_content=worker_data.raw_content,
+                ai_result=ai_result
+            )
+
+            # 3. Закрываем задачу
+            await self.task_repo.update_status(task_id, status="completed", product_id=product.id)
+            print(f"Задача {task_id} успешно завершена. Продукт ID: {product.id}")
+
+        except Exception as e:
+            print(f"Критическая ошибка задачи {task_id}: {str(e)}")
+            await self.task_repo.update_status(task_id, status="failed")

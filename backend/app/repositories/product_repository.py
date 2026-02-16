@@ -29,10 +29,15 @@ class ProductRepository:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_all_versions(self, ozon_id: int) -> List[Product]:
-        query = select(Product).where(Product.ozon_id == ozon_id).order_by(Product.date_added.desc())
+    async def get_all_versions(self, ozon_id: int) -> list[Product]:
+        """Возвращает все найденные версии товара по его внешнему ozon_id"""
+        query = (
+            select(Product)
+            .where(Product.ozon_id == ozon_id)
+            .order_by(Product.date_added.desc())
+        )
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_full_by_id(self, product_id: int) -> Optional[Product]:
         query = (
@@ -70,4 +75,21 @@ class ProductRepository:
         await self.db.commit()
         await self.db.refresh(product)
         return product
+
+    async def get_standard_metrics(self) -> List[Metric]:
+        """Все метрики с is_custom=False"""
+        query = select(Metric).where(Metric.is_custom == False)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_random_custom_metrics(self, limit: int = 30) -> List[Metric]:
+        """Случайные метрики с is_custom=True"""
+        query = (
+            select(Metric)
+            .where(Metric.is_custom == True)
+            .order_by(func.random())
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 

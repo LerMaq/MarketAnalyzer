@@ -1,10 +1,8 @@
-import asyncio
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 
 from app.repositories import ProductRepository
-from app.schemas import SProductCheck, SProductFull, STaskWorkerData
+from app.schemas import SProductCheck, SProductFull, SProductVersionsList, SProductVersion, SAiAnalysisResponse
 from app.models import Product, AiSummary, ProductMetric
 
 
@@ -20,6 +18,26 @@ class ProductService:
 
         return SProductCheck(exists=True, ozon_id=ozon_id,
                              id=product.id, name=product.name, date_added=product.date_added)
+
+    async def get_versions_list(self, ozon_id: int) -> SProductVersionsList:
+        """
+        Получает список всех версий товара.
+        Если версий нет — выбрасывает 404, чтобы роутер вернул ошибку.
+        """
+        products = await self.product_repo.get_all_versions(ozon_id)
+
+        if not products:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Товар с ozon_id {ozon_id} еще не проходил анализ"
+            )
+
+        versions = [
+            SProductVersion(id=p.id, date_added=p.date_added)
+            for p in products
+        ]
+
+        return SProductVersionsList(ozon_id=ozon_id, versions=versions)
 
     async def get_full_report(self, product_id: int) -> SProductFull:
         product = await self.product_repo.get_by_product_id_full(product_id)
@@ -39,85 +57,34 @@ class ProductService:
         product.score = score
         return SProductFull.model_validate(product)
 
-    async def process_worker_data(self, task_id: int, worker_data: STaskWorkerData):
-        task = await self.task_repo.get_by_id(task_id)
-        if not task:
-            return None
+    async def create_full_product(self, ozon_id: int, raw_content: str, ai_result: SAiAnalysisResponse) -> Product:
+        ai_data = ai_result.product
 
-        # Получаем данные от ИИ (пока заглушка)
-        ai_data = await self._get_ai_analysis(worker_data.raw_content)
-        product = ai_data["product"]
-
-        new_product = Product(
-            name=product["name"],
-            description=product["description"],
-            ozon_id=task.ozon_id,
-            raw_content=worker_data.raw_content,
-            price=product["price"],
-            summary=AiSummary(text=product["ai_summary"]["text"])
+        product = Product(
+            ozon_id=ozon_id,
+            name=ai_data.name,
+            description=ai_data.description,
+            price=ai_data.price,
+            raw_content=raw_content  # данные воркера
         )
 
-        for product_metric in product["product_metrics"]:
-            metric = product_metric["metric"]
+        product.summary = AiSummary(text=ai_data.ai_summary.text)
 
-            # Логика сопоставления по названию
-            new_metric = await self.product_repo.get_or_create_metric(
-                name=metric["name"],
+        for pm in ai_data.product_metrics:
+            m_info = pm.metric
+            metric_obj = await self.product_repo.get_or_create_metric(
+                name=m_info.name,
                 defaults={
-                    "description": metric.get("description", f"Анализ параметра {metric['name']}"),
-                    "weight": metric.get("weight", 1.0),
-                    "is_custom": metric.get("is_custom", False)
+                    "description": m_info.description,
+                    "weight": m_info.weight,
+                    "is_custom": m_info.is_custom
                 }
             )
 
-            # Создаем связь между продуктом и метрикой
-            pm_entry = ProductMetric(
-                score=int(product_metric["score"]),  # Нужно изменить в бд на float
-                explanation=str(product_metric["explanation"]),
-                metric=new_metric  # SQLAlchemy сама подставит metric_id после сохранения
-            )
-            new_product.product_metrics.append(pm_entry)
+            product.product_metrics.append(ProductMetric(
+                metric=metric_obj,
+                score=pm.score,
+                explanation=pm.explanation
+            ))
 
-        # 3. Сохраняем все объекты
-        saved_product = await self.product_repo.save_all(new_product)
-
-        # 4. Закрываем задачу
-        await self.task_repo.update_status(
-            task_id=task.id,
-            status="completed",
-            product_id=saved_product.id
-        )
-
-        return saved_product
-
-    async def _get_ai_analysis(self, text: str):
-        """Проработанная заглушка с твоим форматом данных"""
-        await asyncio.sleep(1)
-        return {
-            "product": {
-                "name": "SIM-карта Билайн...",
-                "description": "SIM-карта Билайн с эксклюзивным тарифом...",
-                "price": 43.0,
-                "ai_summary": {"text": "Товар представляет собой..."},
-                "product_metrics": [
-                    {
-                        "metric": {"name": "Соответствие описанию"},
-                        "explanation": "Описание тарифа в целом соответствует...",
-                        "score": 4
-                    },
-                    {
-                        "metric": {
-                            "name": "Сложность управления личным кабинетом",
-                            "description": "Оценка удобства...",
-                            "weight": 0.45,
-                            "is_custom": True
-                        },
-                        "explanation": "Упоминается, что работает...",
-                        "score": 3
-                    }
-                ]
-            }
-        }
-
-    async def get_versions_list(self, ozon_id):
-        pass
+        return await self.product_repo.save_all(product)

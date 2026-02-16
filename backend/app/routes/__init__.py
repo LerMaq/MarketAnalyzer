@@ -1,7 +1,9 @@
 from .products import router as products_router
+from .tasks import router as tasks_router
 
 __all__ = [
-    "products_router"
+    "products_router",
+    "tasks_router"
 ]
 
 # Маршруты будут связаны с клиентами (products - (вывод инфы о товаре, запрос на анализ товара), ai - запросы к нейронке);

@@ -1,7 +1,7 @@
 from .product import Product, Review, AiSummary, Metric, ProductMetric
 from .task import Task
-from .user import User, AiApiKey
-from .permission import Rank, UserRank, Permission, RankPermission
+from .user import User, Rank, UserRank, Permission, RankPermission, AiApiKey
+from .ai import AiConfig, SystemAiApiKey, SystemAiModel
 from .chat import ChatMessage
 
 __all__ = [
@@ -12,10 +12,13 @@ __all__ = [
     "ProductMetric",
     "Task",
     "User",
-    "AiApiKey",
     "Rank",
     "UserRank",
     "Permission",
     "RankPermission",
+    "AiApiKey",
+    "AiConfig",
+    "SystemAiApiKey",
+    "SystemAiModel",
     "ChatMessage"
 ]

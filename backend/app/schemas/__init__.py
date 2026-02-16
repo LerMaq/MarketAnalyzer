@@ -3,11 +3,13 @@ from .review import SReview, SReviewCreate
 from .metric import SProductMetric, SProductMetricCreate
 from .ai_summary import SAiSummary, SAiSummaryCreate
 from .task import STask, STaskAdd, STaskWorkerTake, STaskWorkerData, STaskAddedResponse
+from .ai_analysis import SAiAnalysisResponse, SAiAnalysisProduct, SAiProductMetric, SAiMetricDefinition, SAiSummaryBase
 
 __all__ = [
     "SProductCheck", "SProductFull", "SProductCreate", "SProductVersion", "SProductVersionsList",
     "SReview", "SReviewCreate",
     "SProductMetric", "SProductMetricCreate",
     "SAiSummary", "SAiSummaryCreate",
-    "STask", "STaskAdd", "STaskWorkerTake", "STaskWorkerData", "STaskAddedResponse"
+    "STask", "STaskAdd", "STaskWorkerTake", "STaskWorkerData", "STaskAddedResponse",
+    "SAiAnalysisResponse", "SAiAnalysisProduct", "SAiProductMetric", "SAiMetricDefinition", "SAiSummaryBase"
 ]
