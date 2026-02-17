@@ -3,9 +3,11 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories import TaskRepository
-from app.services import AIService, ProductService
 from app.utils import extract_ozon_id
 from app.schemas import STask, STaskAddedResponse, STaskWorkerTake, STaskWorkerData
+
+from .ai_service import AIService
+from .product_service import ProductService
 
 
 class TaskService:
@@ -48,21 +50,18 @@ class TaskService:
         ai_service = AIService(self.db)
         product_service = ProductService(self.db)
 
-        try:
-            # 1. Получаем строго валидированный JSON через каскад попыток
-            ai_result = await ai_service.get_report_completion(worker_data.raw_content)
 
-            # 2. Сохраняем продукт (передаем и сырой текст, и объект анализа)
-            product = await product_service.create_full_product(
-                ozon_id=task.ozon_id,
-                raw_content=worker_data.raw_content,
-                ai_result=ai_result
-            )
+        # 1. Получаем строго валидированный JSON через каскад попыток
+        ai_result = await ai_service.get_report_completion(worker_data.raw_content)
 
-            # 3. Закрываем задачу
-            await self.task_repo.update_status(task_id, status="completed", product_id=product.id)
-            print(f"Задача {task_id} успешно завершена. Продукт ID: {product.id}")
+        # 2. Сохраняем продукт (передаем и сырой текст, и объект анализа)
+        product = await product_service.create_full_product(
+            ozon_id=task.ozon_id,
+            raw_content=worker_data.raw_content,
+            ai_result=ai_result
+        )
 
-        except Exception as e:
-            print(f"Критическая ошибка задачи {task_id}: {str(e)}")
-            await self.task_repo.update_status(task_id, status="failed")
+        # 3. Закрываем задачу
+        await self.task_repo.update_status(task_id, status="completed", product_id=product.id)
+        print(f"Задача {task_id} успешно завершена. Продукт ID: {product.id}")
+

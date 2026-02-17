@@ -45,7 +45,7 @@ class AIService:
         # Слой 1: Попытки валидации
         for v_attempt in range(3):
             # Слой 2: Попытки перебора моделей
-            for m_attempt in range(5):
+            for m_attempt in range(10):
                 model_record = await self.repo.get_best_model_with_key()
                 if not model_record:
                     raise HTTPException(status_code=503, detail="Нет доступных рабочих моделей ИИ")
