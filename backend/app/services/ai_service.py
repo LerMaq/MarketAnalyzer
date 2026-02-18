@@ -73,6 +73,7 @@ class AIService:
 
                 try:
                     raw_response = await self._execute(model_record, config, messages)
+                    print(raw_response)
 
                     try:
                         validated_data = SAiAnalysisResponse.model_validate(raw_response)

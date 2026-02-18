@@ -56,7 +56,7 @@ class ProductRepository:
         """Находит метрику по имени или создает новую с дефолтными значениями"""
         query = select(Metric).where(Metric.name == name)
         result = await self.db.execute(query)
-        metric = result.scalar_one_or_none()
+        metric = result.scalars().first()
 
         if not metric:
             metric = Metric(
