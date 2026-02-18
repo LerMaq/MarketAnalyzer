@@ -2,16 +2,37 @@ import json
 
 from openai import AsyncOpenAI
 import httpx
-from openai.types.chat import ChatCompletionMessageParam
+
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 from app.repositories import AiRepository, ProductRepository
-from app.schemas import SAiAnalysisResponse
+from app.schemas import SAiAnalysisResponse, SModelPreset, SSystemAiKeyCreate, ApiProviderPreset
 
 
 class AIService:
+    PRESET_TEMPLATES = {
+        "google": {
+            "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "models": [
+                SModelPreset(model_name="gemini-2.5-flash", priority=8),
+                SModelPreset(model_name="gemini-3-flash", priority=8),
+                SModelPreset(model_name="gemini-2.5-flash-lite", priority=10),
+                SModelPreset(model_name="gemma-3-27b-it", priority=3),
+            ]
+        },
+        "openai": {
+            "url": "https://api.openai.com/v1",
+            "models": [
+                SModelPreset(model_name="gpt-4o", priority=9),
+                SModelPreset(model_name="gpt-4o-mini", priority=8),
+                SModelPreset(model_name="gpt-5-mini", priority=10),
+                SModelPreset(model_name="o1-preview", priority=1),
+            ]
+        }
+    }
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = AiRepository(db)
@@ -40,7 +61,7 @@ class AIService:
         if not config:
             raise HTTPException(status_code=500, detail="AI Config 'report_generation' not found")
 
-        full_prompt = await self._assemble_prompt(config.system_instruction, raw_content)
+        messages = [{"role": "user", "content": raw_content}]
 
         # Слой 1: Попытки валидации
         for v_attempt in range(3):
@@ -51,44 +72,80 @@ class AIService:
                     raise HTTPException(status_code=503, detail="Нет доступных рабочих моделей ИИ")
 
                 try:
-                    raw_response = await self._execute(model_record, config, full_prompt)
+                    raw_response = await self._execute(model_record, config, messages)
+
                     try:
                         validated_data = SAiAnalysisResponse.model_validate(raw_response)
                         return validated_data
                     except ValidationError as ve:
                         print(f"Попытка валидации {v_attempt + 1} провалена: {ve}")
+                        # Если JSON сломан, возможно стоит добавить подсказку для ИИ в следующую попытку
                         break
 
                 except Exception as e:
-                    # Ошибка API (тайм-аут, 429, 500 от провайдера)
                     print(f"Ошибка API модели {model_record.model_name}: {e}")
                     await self.repo.mark_model_broken(model_record.id)
-                    continue  # Следующая модель
+                    continue
 
-        raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный результат после всех попыток")
+        raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный результат")
 
-    async def _execute(self, model_record, config, prompt: str) -> dict:
-        async with httpx.AsyncClient(proxy="http://127.0.0.1:2080") as http_client:
-            client = AsyncOpenAI(
-                api_key=model_record.api_key.key,
-                base_url=model_record.api_key.provider_url,
-                http_client=http_client
-            )
+    async def _execute(self, model_record, config, messages):
 
-            messages: list[ChatCompletionMessageParam] = [
-                {"role": "system", "content": config.system_instruction},
-                {"role": "user", "content": prompt}
-            ]
+        http_client = httpx.AsyncClient(proxy="http://127.0.0.1:2080")
 
-            response = await client.chat.completions.create(
-                model=model_record.model_name,
-                messages=messages,
-                temperature=config.temperature,
-                response_format={"type": "json_object"}
-            )
+        client = AsyncOpenAI(
+            api_key=model_record.api_key.key,
+            base_url=model_record.api_key.provider_url,
+            http_client=http_client
+        )
 
-            content = response.choices[0].message.content
-            if not content:
-                raise ValueError("ИИ вернул пустой ответ")
+        full_messages = [
+                            {"role": "system", "content": config.system_instruction}
+                        ] + messages
 
-            return json.loads(content)
+        request_params = {
+            "model": model_record.model_name,
+            "messages": full_messages,
+            "temperature": config.temperature,
+            "stream": config.is_stream
+        }
+
+        if config.is_json and not config.is_stream:
+            request_params["response_format"] = {"type": "json_object"}
+
+        response = await client.chat.completions.create(**request_params)
+
+        if config.is_stream:
+            async def stream_generator():
+                try:
+                    async for chunk in response:
+                        if chunk.choices and chunk.choices[0].delta.content:
+                            yield chunk.choices[0].delta.content
+                finally:
+                    # Закрываем клиенты после завершения стрима
+                    await http_client.aclose()
+
+            return stream_generator()
+
+        result = response.choices[0].message.content
+        await http_client.aclose()
+        return json.loads(result) if config.is_json else result
+
+    async def add_key_with_preset(self, data: SSystemAiKeyCreate):
+        template = self.PRESET_TEMPLATES.get(data.preset.value)
+
+        if data.preset == ApiProviderPreset.custom:
+            url = data.provider_url
+        else:
+            url = template["url"] if template else data.provider_url
+
+        if url == "string" or not url:
+            raise HTTPException(status_code=400, detail="Укажите корректный URL или выберите пресет")
+
+        key_payload = {
+            "key": data.key,
+            "provider_url": url
+        }
+
+        models = template["models"] if template else []
+        return await self.repo.create_system_key_with_models(key_payload, models)

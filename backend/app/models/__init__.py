@@ -2,7 +2,7 @@ from .product import Product, Review, AiSummary, Metric, ProductMetric
 from .task import Task
 from .user import User, Rank, UserRank, Permission, RankPermission, AiApiKey
 from .ai import AiConfig, SystemAiApiKey, SystemAiModel
-from .chat import ChatMessage
+from .chat import ChatMessage, Chat
 
 __all__ = [
     "Product",
@@ -20,5 +20,6 @@ __all__ = [
     "AiConfig",
     "SystemAiApiKey",
     "SystemAiModel",
-    "ChatMessage"
+    "ChatMessage",
+    "Chat"
 ]

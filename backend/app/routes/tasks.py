@@ -6,7 +6,7 @@ from app.database import get_db
 from app.schemas.task import STask, STaskAdd, STaskAddedResponse, STaskWorkerTake, STaskWorkerData
 from app.services.task_service import TaskService
 
-router = APIRouter(prefix="/tasks", tags=["Задачи"])
+router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 @router.post("/add", response_model=STaskAddedResponse)
 async def add_task(data: STaskAdd, db: AsyncSession = Depends(get_db)):

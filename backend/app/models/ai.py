@@ -13,7 +13,7 @@ class SystemAiApiKey(Base):
 class SystemAiModel(Base):
     __tablename__ = "system_ai_models"
     id: Mapped[int] = mapped_column(primary_key=True)
-    api_key_id: Mapped[int] = mapped_column(ForeignKey("system_ai_api_keys.id"))
+    api_key_id: Mapped[int] = mapped_column(ForeignKey("system_ai_api_keys.id", ondelete="CASCADE"))
     model_name: Mapped[str]
     works: Mapped[bool] = mapped_column(default=True)
     priority: Mapped[int] = mapped_column(default=1)
@@ -26,3 +26,5 @@ class AiConfig(Base):
     name: Mapped[str] = mapped_column(unique=True)
     system_instruction: Mapped[str] = mapped_column(Text)
     temperature: Mapped[float] = mapped_column(default=0.7)
+    is_stream: Mapped[bool] = mapped_column(default=False)
+    is_json: Mapped[bool] = mapped_column(default=True)

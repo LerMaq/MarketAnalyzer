@@ -18,7 +18,7 @@ class Product(Base):
     reviews: Mapped[List["Review"]] = relationship(cascade="all, delete-orphan", back_populates="product")
     product_metrics: Mapped[List["ProductMetric"]] = relationship(cascade="all, delete-orphan", back_populates="product")
     summary: Mapped["AiSummary"] = relationship(uselist=False, cascade="all, delete-orphan", back_populates="product")
-    chat_messages: Mapped[List["ChatMessage"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    chats: Mapped[List["Chat"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Product(id={self.id}, name='{self.name}', ozon_id={self.ozon_id}, date_added='{self.date_added}')>"

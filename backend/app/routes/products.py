@@ -4,7 +4,7 @@ from app.database import get_db
 from app.services import ProductService
 from app.schemas import SProductFull, SProductVersionsList
 
-router = APIRouter(prefix="/products", tags=["Товары"])
+router = APIRouter(prefix="/products", tags=["Products"])
 
 @router.get("/check/{ozon_id}", response_model=SProductVersionsList)
 async def check_versions(ozon_id: int, db: AsyncSession = Depends(get_db)):
