@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.database import create_tables, delete_tables
-from app.routes import products_router, tasks_router, ai_router, chat_router
+from app.routes import products_router, tasks_router, ai_router, chat_router, auth_router, user_router
 
 
 @asynccontextmanager
@@ -28,3 +28,5 @@ app.include_router(products_router)
 app.include_router(tasks_router)
 app.include_router(ai_router)
 app.include_router(chat_router)
+app.include_router(auth_router)
+app.include_router(user_router)

@@ -4,7 +4,8 @@ from typing import List, Union
 class Settings(BaseSettings):
     app_name: str = "MarketAnalyzer API"
     debug: bool = True
-    database_url: str
+    DATABASE_URL: str
+    SECRET_KEY: str
     cors_origins: Union[List[str], str] = [
         "http://localhost:5173",
         "http://localhost:3000",

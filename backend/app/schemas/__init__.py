@@ -6,6 +6,8 @@ from .task import STask, STaskAdd, STaskWorkerTake, STaskWorkerData, STaskAddedR
 from .ai_analysis import SAiAnalysisResponse, SAiAnalysisProduct, SAiProductMetric, SAiMetricDefinition, SAiSummaryBase
 from .ai_config import SModelPreset, SSystemAiKeyCreate, ApiProviderPreset
 from .chat import SMessageCreate, SChatCreate, SChatResponse, SChatShortResponse, SMessageResponse
+from .auth import SUserRegister, SUserLogin, SAuthResponse
+from .user import SUserRead, SUserFullProfile
 
 __all__ = [
     "SProductCheck", "SProductFull", "SProductCreate", "SProductVersion", "SProductVersionsList",
@@ -15,5 +17,7 @@ __all__ = [
     "STask", "STaskAdd", "STaskWorkerTake", "STaskWorkerData", "STaskAddedResponse",
     "SAiAnalysisResponse", "SAiAnalysisProduct", "SAiProductMetric", "SAiMetricDefinition", "SAiSummaryBase",
     "SModelPreset", "SSystemAiKeyCreate", "ApiProviderPreset",
-    "SMessageCreate", "SChatCreate", "SChatResponse", "SChatShortResponse", "SMessageResponse"
+    "SMessageCreate", "SChatCreate", "SChatResponse", "SChatShortResponse", "SMessageResponse",
+    "SUserRegister", "SUserLogin", "SAuthResponse",
+    "SUserRead", "SUserFullProfile"
 ]
