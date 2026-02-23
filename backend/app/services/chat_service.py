@@ -52,8 +52,7 @@ class ChatService:
 
         history = await self.repo.get_chat_history(chat_id)
 
-        # Тут можно изменить подход и использовать, например product_sservice.get_full_report,
-        # хотя в текущей версии даже лучше, так как до отчёта о товаре многие данные (в т.ч. и отзывы) не дойдут
+        # Тут можно использовать соответствующий метод product_service.get_full_report из ProductService
         product_context = await self.repo.get_product_context(chat.product_id)
 
         user_key = await self.repo.get_active_user_api_key(chat.user_id)

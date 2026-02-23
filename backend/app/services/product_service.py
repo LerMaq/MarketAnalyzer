@@ -70,7 +70,7 @@ class ProductService:
 
         product.summary = AiSummary(text=ai_data.ai_summary.text)
 
-        # 1. Обработка НЕ кастомных метрик (Только линковка)
+        # Обработка стандартных метрик
         if hasattr(ai_data, 'product_metrics_not_custom'):
             for pm in ai_data.product_metrics_not_custom:
                 try:
@@ -84,14 +84,13 @@ class ProductService:
                             explanation=pm.explanation
                         ))
                 except Exception:
-                    continue  # Просто пропускаем при ошибке
+                    continue
 
-        # 2. Обработка кастомных метрик (Get or Create с проверкой)
+        # Обработка кастомных метрик
         if hasattr(ai_data, 'product_metrics_custom'):
             for pm in ai_data.product_metrics_custom:
                 try:
                     m_info = pm.metric
-                    # Используем get_or_create, но передаем флаг is_custom=True в поиск/создание
                     metric_obj = await self.product_repo.get_or_create_metric(
                         name=m_info.name,
                         defaults={
@@ -101,7 +100,7 @@ class ProductService:
                         }
                     )
 
-                    # Дополнительная проверка: если метрика нашлась, но она НЕ кастомная — пропускаем
+                    # Если метрика нашлась, но она НЕ кастомная — пропускаем
                     if metric_obj and metric_obj.is_custom:
                         product.product_metrics.append(ProductMetric(
                             metric=metric_obj,
