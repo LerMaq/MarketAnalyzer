@@ -69,6 +69,11 @@ class ProductRepository:
             # Мы не делаем commit здесь, чтобы сохранить атомарность всей транзакции
         return metric
 
+    async def get_metric_by_name(self, name: str):
+        query = select(Metric).where(Metric.name == name)
+        result = await self.db.execute(query)
+        return result.scalars().first()
+
     async def save_all(self, product: Product):
         """Сохраняет продукт и все связанные с ним объекты (summary, metrics, etc.)"""
         self.db.add(product)

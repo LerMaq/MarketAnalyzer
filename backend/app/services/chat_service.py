@@ -56,7 +56,11 @@ class ChatService:
         # хотя в текущей версии даже лучше, так как до отчёта о товаре многие данные (в т.ч. и отзывы) не дойдут
         product_context = await self.repo.get_product_context(chat.product_id)
 
-        model_record = await self.ai_service.repo.get_best_model_with_key()
+        user_key = await self.repo.get_active_user_api_key(chat.user_id)
+        if user_key:
+            model_record = user_key
+        else:
+            model_record = await self.ai_service.repo.get_best_model_with_key()
         chat_config = await self.ai_service.repo.get_config_by_name("chat_config")
 
         messages = [
@@ -67,7 +71,7 @@ class ChatService:
         for m in history:
             messages.append({"role": m.role, "content": m.message_text})
 
-        text_stream = await self.ai_service._execute(model_record, chat_config, messages)
+        text_stream = await self.ai_service._execute(chat_config, messages, model_record)
 
         full_reply = []
 

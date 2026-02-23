@@ -1,7 +1,7 @@
 from sqlalchemy import select, delete, desc
 from sqlalchemy.orm import selectinload
 
-from app.models import Product, AiSummary, Chat, ChatMessage
+from app.models import Product, AiSummary, Chat, ChatMessage, AiApiKey
 
 
 class ChatRepository:
@@ -81,3 +81,11 @@ class ChatRepository:
         result = await self.db.execute(query)
         await self.db.commit()
         return result.rowcount > 0
+
+    async def get_active_user_api_key(self, user_id):
+        query = (
+            select(AiApiKey)
+            .where(AiApiKey.user_id == user_id, AiApiKey.is_active == True)
+        )
+        result = await self.db.execute(query)
+        return result.scalars().first()

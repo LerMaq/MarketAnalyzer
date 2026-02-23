@@ -43,8 +43,8 @@ class AIService:
         standards = await self.prod_repo.get_standard_metrics()
         customs = await self.prod_repo.get_random_custom_metrics(30)
 
-        standards_text = "\n".join([f"- {m.name}: {m.description}" for m in standards])
-        customs_text = "\n".join([f"- {m.name}: {m.description}" for m in customs])
+        standards_text = "\n".join([f"- {m.name}: {m.description}. Вес метрики: {m.weight}" for m in standards])
+        customs_text = "\n".join([f"- {m.name}: {m.description}. Вес метрики: {m.weight}" for m in customs])
 
         full_prompt = (
             f"{config_instruction}\n\n"
@@ -63,74 +63,100 @@ class AIService:
 
         messages = [{"role": "user", "content": raw_content}]
 
-        # Слой 1: Попытки валидации
+        # Попытки валидации
         for v_attempt in range(3):
-            # Слой 2: Попытки перебора моделей
-            for m_attempt in range(10):
+            try:
+                raw_response = await self._execute(config=config, messages=messages)
+                validated_data = SAiAnalysisResponse.model_validate(raw_response)
+                return validated_data
+
+            except ValidationError as ve:
+                print(f"Попытка валидации {v_attempt + 1} провалена: {ve}")
+                continue
+            except Exception as e:
+                # Если даже _execute поднял исключение после всех переборов
+                raise HTTPException(status_code=503, detail=f"Критическая ошибка ИИ: {str(e)}")
+
+        raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный результат после нескольких попыток")
+
+    async def _execute(self, config, messages, model_record=None):
+        """
+        Выполняет запрос к ИИ.
+        Если model_record не передан или не работает, перебирает лучшие системные модели.
+        """
+        # Слой перебора моделей
+        for m_attempt in range(10):
+            # Если модель не передана или это повторная попытка после ошибки
+            if not model_record:
                 model_record = await self.repo.get_best_model_with_key()
                 if not model_record:
-                    raise HTTPException(status_code=503, detail="Нет доступных рабочих моделей ИИ")
+                    raise Exception("Нет доступных системных моделей")
 
-                try:
-                    raw_response = await self._execute(model_record, config, messages)
-                    print(raw_response)
+            if hasattr(model_record, "api_key"):  # Это системная модель (SystemAiModel)
+                api_key_val = model_record.api_key.key
+                base_url_val = model_record.api_key.provider_url
+                model_name_val = model_record.model_name
+            else: # Это пользовательская модель (AiApiKey)
+                api_key_val = model_record.key
+                base_url_val = model_record.provider_url
+                model_name_val = model_record.model_name
 
-                    try:
-                        validated_data = SAiAnalysisResponse.model_validate(raw_response)
-                        return validated_data
-                    except ValidationError as ve:
-                        print(f"Попытка валидации {v_attempt + 1} провалена: {ve}")
-                        # Если JSON сломан, возможно стоит добавить подсказку для ИИ в следующую попытку
-                        break
+            http_client = httpx.AsyncClient(proxy="http://127.0.0.1:2080")
+            try:
+                client = AsyncOpenAI(
+                    api_key=api_key_val,
+                    base_url=base_url_val,
+                    http_client=http_client
+                )
 
-                except Exception as e:
-                    print(f"Ошибка API модели {model_record.model_name}: {e}")
+                request_params = {
+                    "model": model_name_val,
+                    "messages": [{"role": "system", "content": config.system_instruction}] + messages,
+                    "temperature": config.temperature,
+                    "stream": config.is_stream
+                }
+
+                if config.is_json and not config.is_stream:
+                    request_params["response_format"] = {"type": "json_object"}
+
+                response = await client.chat.completions.create(**request_params)
+
+                # Обработка стриминга
+                if config.is_stream:
+                    return self._create_stream_generator(response, http_client)
+
+                # Обработка обычного ответа
+                result = response.choices[0].message.content
+                await http_client.aclose()
+
+                if not result:
+                    raise ValueError("Пустой ответ от модели")
+
+                return json.loads(result) if config.is_json else result
+
+            except Exception as e:
+                await http_client.aclose()
+                print(f"Ошибка модели {model_record.model_name}: {e}")
+
+                if hasattr(model_record, 'id'): # Если модель системная
                     await self.repo.mark_model_broken(model_record.id)
-                    continue
 
-        raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный результат")
+                # Сбрасываем текущую модель, чтобы на следующей итерации взялась новая системная
+                model_record = None
+                continue
 
-    async def _execute(self, model_record, config, messages):
+        raise Exception("Слой перебора моделей исчерпал все попытки")
 
-        http_client = httpx.AsyncClient(proxy="http://127.0.0.1:2080")
+    async def _create_stream_generator(self, response, http_client):
+        async def stream_generator():
+            try:
+                async for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+            finally:
+                await http_client.aclose()
 
-        client = AsyncOpenAI(
-            api_key=model_record.api_key.key,
-            base_url=model_record.api_key.provider_url,
-            http_client=http_client
-        )
-
-        full_messages = [
-                            {"role": "system", "content": config.system_instruction}
-                        ] + messages
-
-        request_params = {
-            "model": model_record.model_name,
-            "messages": full_messages,
-            "temperature": config.temperature,
-            "stream": config.is_stream
-        }
-
-        if config.is_json and not config.is_stream:
-            request_params["response_format"] = {"type": "json_object"}
-
-        response = await client.chat.completions.create(**request_params)
-
-        if config.is_stream:
-            async def stream_generator():
-                try:
-                    async for chunk in response:
-                        if chunk.choices and chunk.choices[0].delta.content:
-                            yield chunk.choices[0].delta.content
-                finally:
-                    # Закрываем клиенты после завершения стрима
-                    await http_client.aclose()
-
-            return stream_generator()
-
-        result = response.choices[0].message.content
-        await http_client.aclose()
-        return json.loads(result) if config.is_json else result
+        return stream_generator()
 
     async def add_key_with_preset(self, data: SSystemAiKeyCreate):
         template = self.PRESET_TEMPLATES.get(data.preset.value)

@@ -5,6 +5,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 class Chat(Base):
+    """
+    Сессия чата. Привязана к товару и к пользователю, включает список сообщений. В чате с ИИ о товаре можно создать
+    новый диалог, а старые будут храниться в истории и к ним можно будет вернуться.
+    """
     __tablename__ = "chats"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -22,6 +26,7 @@ class Chat(Base):
 
 
 class ChatMessage(Base):
+    """Список сообщений в чате"""
     __tablename__ = "chat_messages"
 
     id: Mapped[int] = mapped_column(primary_key=True)

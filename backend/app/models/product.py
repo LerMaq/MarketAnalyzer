@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 class Product(Base):
+    """Проанализированный товар со всеми данными"""
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -24,6 +25,7 @@ class Product(Base):
         return f"<Product(id={self.id}, name='{self.name}', ozon_id={self.ozon_id}, date_added='{self.date_added}')>"
 
 class Review(Base):
+    """Отзывы о товаре. Пока не используется, так как не факт, что будет возможность парсинга отзывов"""
     __tablename__ = "reviews"
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
@@ -38,6 +40,7 @@ class Review(Base):
         return f"<Review(id={self.id}, product_id='{self.product_id}', rating='{self.rating}', author_name='{self.author_name}')>"
 
 class AiSummary(Base):
+    """Просто краткий вывод о товаре"""
     __tablename__ = "ai_summaries"
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
@@ -49,6 +52,7 @@ class AiSummary(Base):
         return f"<AiSummary(id={self.id}, product_id='{self.product_id}')>"
 
 class Metric(Base):
+    """Критерий для оценки товара"""
     __tablename__ = "metrics"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -60,6 +64,7 @@ class Metric(Base):
         return f"<Metric(id={self.id}, name='{self.name}', weight={self.weight})>"
 
 class ProductMetric(Base):
+    """Оценка товара по метрике"""
     __tablename__ = "product_metrics"
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
