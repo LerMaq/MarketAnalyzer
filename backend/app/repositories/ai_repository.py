@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, update
 from sqlalchemy.orm import joinedload
 from typing import List
+
 from app.models.ai import SystemAiModel, AiConfig, SystemAiApiKey
 from app.schemas import SModelPreset
 

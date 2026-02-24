@@ -1,9 +1,9 @@
 from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload, joinedload
-from datetime import datetime
+from datetime import datetime, timezone
 
-from app.models.user import User, Session, UserRank, Rank, RankPermission, Permission
+from app.models.user import User, Session, UserRank, Rank, RankPermission, Permission, UserUsage
 from app.auth.security import get_token_hash
 
 
@@ -56,4 +56,36 @@ class UserRepository:
         await self.db.execute(
             update(Session).where(Session.token_hash == t_hash).values(is_active=False)
         )
+        await self.db.commit()
+
+    async def get_or_create_today_usage(self, user_id: int) -> UserUsage:
+        today = datetime.now(timezone.utc).date()
+
+        query = select(UserUsage).where(
+            UserUsage.user_id == user_id,
+            UserUsage.usage_date == today
+        )
+        result = await self.db.execute(query)
+        usage = result.scalar_one_or_none()
+
+        if not usage:
+            usage = UserUsage(user_id=user_id, usage_date=today)
+            self.db.add(usage)
+            await self.db.commit()
+            await self.db.refresh(usage)
+
+        return usage
+
+    async def increment_usage(self, user_id: int, analysis: bool = False, chat: bool = False):
+        today = datetime.now(timezone.utc).date()
+        values = {}
+        if analysis: values[UserUsage.analysis_count] = UserUsage.analysis_count + 1
+        if chat: values[UserUsage.chat_count] = UserUsage.chat_count + 1
+
+        query = update(UserUsage).where(
+            UserUsage.user_id == user_id,
+            UserUsage.usage_date == today
+        ).values(**values)
+
+        await self.db.execute(query)
         await self.db.commit()

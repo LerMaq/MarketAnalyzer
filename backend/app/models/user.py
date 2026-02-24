@@ -1,8 +1,10 @@
-from datetime import datetime, timezone
-from sqlalchemy import ForeignKey, Text, String, DateTime
+from datetime import date, datetime, timezone
+from sqlalchemy import ForeignKey, Text, String, DateTime, UniqueConstraint
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import List, Optional
 from app.database import Base
+
 
 class User(Base):
     """Пользователь системы"""
@@ -14,6 +16,33 @@ class User(Base):
 
     user_ranks: Mapped[List["UserRank"]] = relationship(back_populates="user")
     sessions: Mapped[List["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+    @hybrid_property
+    def active_permissions(self) -> set[str]:
+        """Возвращает набор активных прав пользователя."""
+        active_perms = set()
+        now = datetime.now(timezone.utc)
+
+        for ur in self.user_ranks:
+            if ur.expires_at is None or ur.expires_at > now:
+                for rp in ur.rank.rank_permissions:
+                    active_perms.add(rp.permission.name)
+        return active_perms
+
+    @property
+    def daily_limits(self) -> dict:
+        """Находит максимальные лимиты среди всех ролей пользователя."""
+        limits = {"analysis": 0, "chat": 0}
+        now = datetime.now(timezone.utc)
+
+        for ur in self.user_ranks:
+            if ur.expires_at is None or ur.expires_at > now:
+                rank = ur.rank
+                if rank.daily_analysis_limit is not None:
+                    limits["analysis"] = max(limits["analysis"], rank.daily_analysis_limit)
+                if rank.daily_chat_limit is not None:
+                    limits["chat"] = max(limits["chat"], rank.daily_chat_limit)
+        return limits
 
     def __repr__(self):
         return f"<User(id={self.id}, name='{self.name}', email='{self.email}')>"
@@ -38,8 +67,12 @@ class Rank(Base):
     """Роль пользователя в системе"""
     __tablename__ = "ranks"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] # free, premium, ultra, worker, admin
+    name: Mapped[str] # free, premium, worker, moderator, admin
     level: Mapped[int]
+
+    # Лимиты (могут быть null для ролей типа worker или moderator)
+    daily_analysis_limit: Mapped[Optional[int]] = mapped_column(nullable=True)
+    daily_chat_limit: Mapped[Optional[int]] = mapped_column(nullable=True)
 
     rank_permissions: Mapped[List["RankPermission"]] = relationship(back_populates="rank")
     user_ranks: Mapped[List["UserRank"]] = relationship(back_populates="rank")
@@ -98,3 +131,17 @@ class Session(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))
 
     user: Mapped["User"] = relationship(back_populates="sessions")
+
+
+class UserUsage(Base):
+    """Статистика использования ресурсов по дням"""
+    __tablename__ = "user_usage"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    usage_date: Mapped[date] = mapped_column(default=lambda: datetime.now(timezone.utc).date())
+
+    analysis_count: Mapped[int] = mapped_column(default=0)
+    chat_count: Mapped[int] = mapped_column(default=0)
+
+    # Индекс для быстрого поиска связки юзер + дата
+    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="idx_user_usage_date"),)

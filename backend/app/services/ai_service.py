@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 
 from openai import AsyncOpenAI
 import httpx
@@ -7,6 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
+from app.models import User
 from app.repositories import AiRepository, ProductRepository
 from app.schemas import SAiAnalysisResponse, SModelPreset, SSystemAiKeyCreate, ApiProviderPreset
 
@@ -66,7 +68,7 @@ class AIService:
         # Попытки валидации
         for v_attempt in range(3):
             try:
-                raw_response = await self._execute(config=config, messages=messages)
+                raw_response = await self.execute(config=config, messages=messages)
                 validated_data = SAiAnalysisResponse.model_validate(raw_response)
                 return validated_data
 
@@ -74,12 +76,12 @@ class AIService:
                 print(f"Попытка валидации {v_attempt + 1} провалена: {ve}")
                 continue
             except Exception as e:
-                # Если даже _execute поднял исключение после всех переборов
+                # Если даже execute поднял исключение после всех переборов
                 raise HTTPException(status_code=503, detail=f"Критическая ошибка ИИ: {str(e)}")
 
         raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный результат после нескольких попыток")
 
-    async def _execute(self, config, messages, model_record=None):
+    async def execute(self, config, messages, model_record=None):
         """
         Выполняет запрос к ИИ.
         Если model_record не передан или не работает, перебирает лучшие системные модели.
@@ -123,7 +125,7 @@ class AIService:
 
                 # Обработка стриминга
                 if config.is_stream:
-                    return self._create_stream_generator(response, http_client)
+                    return self.create_stream_generator(response, http_client)
 
                 # Обработка обычного ответа
                 result = response.choices[0].message.content
@@ -147,7 +149,7 @@ class AIService:
 
         raise Exception("Слой перебора моделей исчерпал все попытки")
 
-    async def _create_stream_generator(self, response, http_client):
+    async def create_stream_generator(self, response, http_client):
         async def stream_generator():
             try:
                 async for chunk in response:
@@ -158,7 +160,13 @@ class AIService:
 
         return stream_generator()
 
-    async def add_key_with_preset(self, data: SSystemAiKeyCreate):
+    async def add_key_with_preset(self, data: SSystemAiKeyCreate, user: Optional[User]):
+        if not user:
+            raise HTTPException(status_code=401, detail="Log in required")
+
+        if "ai.manage_keys" not in user.active_permissions:
+            raise HTTPException(status_code=403, detail="Недостаточно прав для управления ключами")
+
         template = self.PRESET_TEMPLATES.get(data.preset.value)
 
         if data.preset == ApiProviderPreset.custom:
@@ -166,7 +174,7 @@ class AIService:
         else:
             url = template["url"] if template else data.provider_url
 
-        if url == "string" or not url:
+        if not url or url == "string":
             raise HTTPException(status_code=400, detail="Укажите корректный URL или выберите пресет")
 
         key_payload = {
@@ -175,4 +183,10 @@ class AIService:
         }
 
         models = template["models"] if template else []
-        return await self.repo.create_system_key_with_models(key_payload, models)
+        new_key = await self.repo.create_system_key_with_models(key_payload, models)
+
+        return {
+            "status": "success",
+            "key_id": new_key.id,
+            "models_created": len(models)
+        }

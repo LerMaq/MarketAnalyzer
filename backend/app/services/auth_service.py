@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Response
+from sqlalchemy import select
+
+from app.models.user import Rank, UserRank
 from app.repositories.user_repository import UserRepository
 from app.auth.security import hash_password, verify_password, generate_session_token, get_token_hash
 from app.schemas.auth import SUserRegister, SUserLogin, SAuthResponse
@@ -8,6 +11,7 @@ from app.schemas.auth import SUserRegister, SUserLogin, SAuthResponse
 class AuthService:
     def __init__(self, db):
         self.repo = UserRepository(db)
+        self.db = db
 
     async def register(self, response: Response, data: SUserRegister, ua: str, ip: str) -> SAuthResponse:
         if await self.repo.get_by_email(data.email):
@@ -19,6 +23,15 @@ class AuthService:
             "password": hashed_pw,
             "name": data.name
         })
+
+        free_rank = await self.db.execute(select(Rank).where(Rank.name == 'free'))
+        free_rank = free_rank.scalar_one_or_none()
+
+        if free_rank:
+            user_rank = UserRank(user_id=user.id, rank_id=free_rank.id, expires_at=None)
+            self.db.add(user_rank)
+            await self.db.commit()
+
         return await self._create_session_flow(response, user.id, ua, ip)
 
     async def login(self, response: Response, data: SUserLogin, ua: str, ip: str) -> SAuthResponse:

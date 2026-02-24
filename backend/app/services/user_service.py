@@ -1,4 +1,7 @@
-from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import HTTPException, status
+
 from app.repositories.user_repository import UserRepository
 from app.models.user import User
 from app.schemas.user import SUserFullProfile
@@ -8,15 +11,11 @@ class UserService:
     def __init__(self, db):
         self.repo = UserRepository(db)
 
-    async def get_my_profile(self, user: User) -> SUserFullProfile:
+    async def get_my_profile(self, user: Optional[User]) -> SUserFullProfile:
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
         # Собираем права
-        perms = set()
-        now = datetime.now(timezone.utc)
-
-        for ur in user.user_ranks:
-            if ur.expires_at is None or ur.expires_at > now:
-                for rp in ur.rank.rank_permissions:
-                    perms.add(rp.permission.name)
+        perms = user.active_permissions
 
         # Подготовка данных для схемы
         profile_data = {
