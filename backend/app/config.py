@@ -1,19 +1,37 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Union
+from pydantic import field_validator
+from typing import List, Any
+
 
 class Settings(BaseSettings):
     app_name: str = "MarketAnalyzer API"
     debug: bool = True
-    database_url: str
-    cors_origins: Union[List[str], str] = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ]
-    static_dir: str = "static"
-    images_dir: str = "static/images"
+    DATABASE_URL: str
+    SECRET_KEY: str
 
-    model_config = SettingsConfigDict(env_file=".env") # Путь относительно папки backend
+    # Меняем тип на Any, чтобы Pydantic не паниковал при получении строки
+    CORS_ORIGINS: Any = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            # Если это строка через запятую
+            if not v.startswith("["):
+                return [i.strip() for i in v.split(",")]
+            # Если это строка, которая выглядит как JSON-массив
+            import json
+            return json.loads(v)
+        return v
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        env_prefix=""  # Гарантируем, что префиксы не мешают
+    )
+
 
 settings = Settings()

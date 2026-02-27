@@ -4,7 +4,7 @@ from app.config import settings
 
 
 Base = declarative_base()
-engine = create_async_engine(settings.database_url)
+engine = create_async_engine(settings.DATABASE_URL)
 new_session = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,

@@ -1,7 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
-from app.repositories.product_repository import ProductRepository
-from app.schemas import SProductCheck, SProductFull
+
+from app.repositories import ProductRepository
+from app.schemas import SProductCheck, SProductFull, SProductVersionsList, SProductVersion, SAiAnalysisResponse
+from app.models import Product, AiSummary, ProductMetric
+
 
 
 class ProductService:
@@ -16,12 +19,26 @@ class ProductService:
         return SProductCheck(exists=True, ozon_id=ozon_id,
                              id=product.id, name=product.name, date_added=product.date_added)
 
-    async def get_full_report(self, ozon_id: int) -> SProductFull:
-        product = await self.product_repo.get_by_ozon_id_full(ozon_id)
+    async def get_versions_list(self, ozon_id: int) -> SProductVersionsList:
+        """
+        Получает список всех версий товара.
+        Если версий нет — возвращает пустой список.
+        """
+        products = await self.product_repo.get_all_versions(ozon_id)
+
+        versions = [
+            SProductVersion(id=p.id, date_added=p.date_added)
+            for p in products
+        ]
+
+        return SProductVersionsList(ozon_id=ozon_id, versions=versions)
+
+    async def get_full_report(self, product_id: int) -> SProductFull:
+        product = await self.product_repo.get_by_product_id_full(product_id)
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Товар с ID {ozon_id} не найден в базе"
+                detail=f"Товар с ID {product_id} не найден в базе"
             )
         if not product.product_metrics:
             score = 0.0
@@ -33,3 +50,56 @@ class ProductService:
                 score = 0.0
         product.score = score
         return SProductFull.model_validate(product)
+
+    async def create_full_product(self, ozon_id: int, raw_content: str, ai_result: SAiAnalysisResponse) -> Product:
+        ai_data = ai_result.product
+
+        product = Product(
+            ozon_id=ozon_id,
+            name=ai_data.name,
+            description=ai_data.description,
+            price=ai_data.price,
+            raw_content=raw_content
+        )
+        product.summary = AiSummary(text=ai_data.ai_summary.text)
+
+        for pm in ai_data.product_metrics_standard:
+            try:
+                metric_obj = await self.product_repo.get_metric_by_name(pm.metric.name)
+
+                # Привязываем только если это реально стандартная метрика
+                if metric_obj and not metric_obj.is_custom:
+                    product.product_metrics.append(ProductMetric(
+                        metric=metric_obj,
+                        score=pm.score,
+                        explanation=pm.explanation
+                    ))
+            except Exception as e:
+                print(f"Ошибка связи со стандартной метрикой {pm.metric.name}: {e}")
+
+        for pm in ai_data.product_metrics_custom:
+            try:
+                m_info = pm.metric
+
+                # Собираем дефолты, фильтруя None, чтобы сработали значения из get_or_create_metric
+                metric_defaults = {}
+                if m_info.description:
+                    metric_defaults["description"] = m_info.description
+                if m_info.weight is not None:
+                    metric_defaults["weight"] = m_info.weight
+
+                metric_obj = await self.product_repo.get_or_create_metric(
+                    name=m_info.name,
+                    defaults=metric_defaults
+                )
+
+                if metric_obj and metric_obj.is_custom:
+                    product.product_metrics.append(ProductMetric(
+                        metric=metric_obj,
+                        score=pm.score,
+                        explanation=pm.explanation
+                    ))
+            except Exception as e:
+                print(f"Ошибка кастомной метрики {pm.metric.name}: {e}")
+
+        return await self.product_repo.save_all(product)
