@@ -11,6 +11,12 @@ database_url=postgresql+asyncpg://DB_USER:DB_PASS@DB_HOST:DB_PORT/DB_NAME
 - npm/yarn
 - Git
 
+### Настройка перед запуском
+
+- Создать backend\.env по шаблону
+- Создать frontend\.env по шаблону
+- Заполнить БД стартовыми данными (backend\scripts\seed_db.py)
+
 ### Локальная разработка
 
 #### 1️⃣ Запуск Backend
@@ -35,6 +41,8 @@ python run.py
 Backend будет доступен по адресу: **http://localhost:8000**, а также будет доступен в локальной сети
 
 API документация (Swagger UI): **http://localhost:8000/docs**
+
+Добавьте API ключ нейросети по [Эндпоинту](http://localhost:8000/docs#/AI%20Setup/setup_ai_key_ai_setup_keys_post). Необходимо нажать "Try it out", вписать ключ в key и нажать "Execute".
 
 Закрыть, если завис:
 ``` bash

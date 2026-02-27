@@ -62,8 +62,8 @@ class ProductRepository:
             metric = Metric(
                 name=name,
                 description=defaults.get("description", "Автоматически созданная метрика"),
-                weight=defaults.get("weight", 1.0),
-                is_custom=defaults.get("is_custom", False)
+                weight=defaults.get("weight", 0.4),
+                is_custom=defaults.get("is_custom", True)
             )
             self.db.add(metric)
             # Мы не делаем commit здесь, чтобы сохранить атомарность всей транзакции

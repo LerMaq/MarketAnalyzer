@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+
+from app.config import settings
 from app.database import create_tables, delete_tables
 from app.routes import products_router, tasks_router, ai_router, chat_router, auth_router, user_router
 
@@ -18,12 +20,11 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # В разработке разрешаем всё, потом заменим на адрес фронта
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(products_router)
 app.include_router(tasks_router)
 app.include_router(ai_router)

@@ -14,7 +14,8 @@
   "dependencies": {
     "axios": "^1.13.2",
     "floating-vue": "^5.2.2",
-    "vue": "^3.5.25"
+    "vue": "^3.5.25",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.2",

@@ -40,46 +40,50 @@ class AIService:
         self.repo = AiRepository(db)
         self.prod_repo = ProductRepository(db)
 
-    async def _assemble_prompt(self, config_instruction: str, raw_content: str) -> str:
-        """Собирает финальный промпт со справочником метрик"""
-        standards = await self.prod_repo.get_standard_metrics()
-        customs = await self.prod_repo.get_random_custom_metrics(30)
-
-        standards_text = "\n".join([f"- {m.name}: {m.description}. Вес метрики: {m.weight}" for m in standards])
-        customs_text = "\n".join([f"- {m.name}: {m.description}. Вес метрики: {m.weight}" for m in customs])
-
-        full_prompt = (
-            f"{config_instruction}\n\n"
-            f"СПРАВОЧНИК МЕТРИК, ИМЕЮЩИХСЯ В БАЗЕ ДАННЫХ:\n\n"
-            f"Стандартные метрики (is_custom: false) — выбери любые 5:\n{standards_text}\n\n"
-            f"Метрики, ранее созданные нейросетью (is_custom: true) — можешь использовать некоторые "
-            f"отсюда, если они подходят. Если нет — придумай новую:\n{customs_text}\n\n"
-            f"ДАННЫЕ ТОВАРА ДЛЯ АНАЛИЗА:\n{raw_content}"
-        )
-        return full_prompt
-
     async def get_report_completion(self, raw_content: str) -> SAiAnalysisResponse:
         config = await self.repo.get_config("report_generation")
         if not config:
             raise HTTPException(status_code=500, detail="AI Config 'report_generation' not found")
 
-        messages = [{"role": "user", "content": raw_content}]
+        standards = await self.prod_repo.get_standard_metrics()
+        customs = await self.prod_repo.get_random_custom_metrics(30)
 
-        # Попытки валидации
+        standards_text = "\n".join([f"- {m.name}: {m.description}. Вес: {m.weight}" for m in standards])
+        customs_text = "\n".join([f"- {m.name}: {m.description}. Вес: {m.weight}" for m in customs])
+
+        system_content = (
+            f"{config.system_instruction}\n\n"
+            f"СПРАВОЧНИК МЕТРИК, ИМЕЮЩИХСЯ В БАЗЕ ДАННЫХ:\n\n"
+            f"Стандартные метрики (product_metrics_standard) — выбери любые 5:\n{standards_text}\n\n"
+            f"Метрики, ранее созданные нейросетью (product_metrics_custom) — можешь использовать некоторые "
+            f"отсюда, если они подходят. Если нет — придумай новую:\n{customs_text}\n\n"
+            f"ДАННЫЕ ТОВАРА ДЛЯ АНАЛИЗА:\n{raw_content}"
+        )
+
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": f"ПРОАНАЛИЗИРУЙ ДАННЫЕ ЭТОГО ТОВАРА:\n{raw_content}"}
+        ]
+        print(f"В нейросеть отправляются следующие данные о товаре для анализа:"
+              f"{messages}")
+
         for v_attempt in range(3):
             try:
                 raw_response = await self.execute(config=config, messages=messages)
+                print(f"Нейросеть сгенерировала отчёт! Вот её чистый ответ: {raw_response}")
+
                 validated_data = SAiAnalysisResponse.model_validate(raw_response)
                 return validated_data
 
             except ValidationError as ve:
-                print(f"Попытка валидации {v_attempt + 1} провалена: {ve}")
+                print(f"Ошибка валидации Pydantic: {ve}")
+                # Можно добавить небольшую подсказку в messages для следующей попытки,
+                # но пока просто пробуем еще раз
                 continue
             except Exception as e:
-                # Если даже execute поднял исключение после всех переборов
-                raise HTTPException(status_code=503, detail=f"Критическая ошибка ИИ: {str(e)}")
+                raise HTTPException(status_code=503, detail=f"Ошибка провайдера ИИ: {str(e)}")
 
-        raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный результат после нескольких попыток")
+        raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный JSON после 3 попыток")
 
     async def execute(self, config, messages, model_record=None):
         """
@@ -150,15 +154,12 @@ class AIService:
         raise Exception("Слой перебора моделей исчерпал все попытки")
 
     async def create_stream_generator(self, response, http_client):
-        async def stream_generator():
-            try:
-                async for chunk in response:
-                    if chunk.choices and chunk.choices[0].delta.content:
-                        yield chunk.choices[0].delta.content
-            finally:
-                await http_client.aclose()
-
-        return stream_generator()
+        try:
+            async for chunk in response:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        finally:
+            await http_client.aclose()
 
     async def add_key_with_preset(self, data: SSystemAiKeyCreate, user: Optional[User]):
         if not user:

@@ -102,7 +102,7 @@ class ChatService:
 
         async for text_chunk in text_stream:
             full_reply.append(text_chunk)
-            yield f"data: {text_chunk}\\n\\n"
+            yield f"data: {text_chunk}\n\n"
 
         yield "data: [DONE]\\n\\n"
 

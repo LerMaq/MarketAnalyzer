@@ -78,14 +78,20 @@ class UserRepository:
 
     async def increment_usage(self, user_id: int, analysis: bool = False, chat: bool = False):
         today = datetime.now(timezone.utc).date()
-        values = {}
-        if analysis: values[UserUsage.analysis_count] = UserUsage.analysis_count + 1
-        if chat: values[UserUsage.chat_count] = UserUsage.chat_count + 1
+        update_data = {}
+
+        if analysis:
+            update_data[UserUsage.analysis_count] = UserUsage.analysis_count + 1
+        if chat:
+            update_data[UserUsage.chat_count] = UserUsage.chat_count + 1
+
+        if not update_data:
+            return
 
         query = update(UserUsage).where(
             UserUsage.user_id == user_id,
             UserUsage.usage_date == today
-        ).values(**values)
+        ).values(update_data)
 
         await self.db.execute(query)
         await self.db.commit()

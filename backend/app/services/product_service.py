@@ -22,15 +22,9 @@ class ProductService:
     async def get_versions_list(self, ozon_id: int) -> SProductVersionsList:
         """
         Получает список всех версий товара.
-        Если версий нет — выбрасывает 404, чтобы роутер вернул ошибку.
+        Если версий нет — возвращает пустой список.
         """
         products = await self.product_repo.get_all_versions(ozon_id)
-
-        if not products:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Товар с ozon_id {ozon_id} еще не проходил анализ"
-            )
 
         versions = [
             SProductVersion(id=p.id, date_added=p.date_added)
@@ -65,49 +59,47 @@ class ProductService:
             name=ai_data.name,
             description=ai_data.description,
             price=ai_data.price,
-            raw_content=raw_content  # данные воркера
+            raw_content=raw_content
         )
-
         product.summary = AiSummary(text=ai_data.ai_summary.text)
 
-        # Обработка стандартных метрик
-        if hasattr(ai_data, 'product_metrics_not_custom'):
-            for pm in ai_data.product_metrics_not_custom:
-                try:
-                    # Ищем метрику в БД. Если её нет — пропускаем.
-                    metric_obj = await self.product_repo.get_metric_by_name(pm.name)
+        for pm in ai_data.product_metrics_standard:
+            try:
+                metric_obj = await self.product_repo.get_metric_by_name(pm.metric.name)
 
-                    if metric_obj and not metric_obj.is_custom:
-                        product.product_metrics.append(ProductMetric(
-                            metric=metric_obj,
-                            score=pm.score,
-                            explanation=pm.explanation
-                        ))
-                except Exception:
-                    continue
+                # Привязываем только если это реально стандартная метрика
+                if metric_obj and not metric_obj.is_custom:
+                    product.product_metrics.append(ProductMetric(
+                        metric=metric_obj,
+                        score=pm.score,
+                        explanation=pm.explanation
+                    ))
+            except Exception as e:
+                print(f"Ошибка связи со стандартной метрикой {pm.metric.name}: {e}")
 
-        # Обработка кастомных метрик
-        if hasattr(ai_data, 'product_metrics_custom'):
-            for pm in ai_data.product_metrics_custom:
-                try:
-                    m_info = pm.metric
-                    metric_obj = await self.product_repo.get_or_create_metric(
-                        name=m_info.name,
-                        defaults={
-                            "description": m_info.description,
-                            "weight": m_info.weight,
-                            "is_custom": True
-                        }
-                    )
+        for pm in ai_data.product_metrics_custom:
+            try:
+                m_info = pm.metric
 
-                    # Если метрика нашлась, но она НЕ кастомная — пропускаем
-                    if metric_obj and metric_obj.is_custom:
-                        product.product_metrics.append(ProductMetric(
-                            metric=metric_obj,
-                            score=pm.score,
-                            explanation=pm.explanation
-                        ))
-                except Exception:
-                    continue
+                # Собираем дефолты, фильтруя None, чтобы сработали значения из get_or_create_metric
+                metric_defaults = {}
+                if m_info.description:
+                    metric_defaults["description"] = m_info.description
+                if m_info.weight is not None:
+                    metric_defaults["weight"] = m_info.weight
+
+                metric_obj = await self.product_repo.get_or_create_metric(
+                    name=m_info.name,
+                    defaults=metric_defaults
+                )
+
+                if metric_obj and metric_obj.is_custom:
+                    product.product_metrics.append(ProductMetric(
+                        metric=metric_obj,
+                        score=pm.score,
+                        explanation=pm.explanation
+                    ))
+            except Exception as e:
+                print(f"Ошибка кастомной метрики {pm.metric.name}: {e}")
 
         return await self.product_repo.save_all(product)
