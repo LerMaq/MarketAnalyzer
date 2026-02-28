@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import ForeignKey, Text, Boolean
+from sqlalchemy import ForeignKey, Text, Boolean, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -12,7 +12,7 @@ class Product(Base):
     name: Mapped[str]
     description: Mapped[Optional[str]] = mapped_column(Text)
     raw_content: Mapped[Optional[str]] = mapped_column(Text)
-    ozon_id: Mapped[int] = mapped_column() # Убрано unique=True
+    ozon_id: Mapped[int] = mapped_column(BigInteger) # Убрано unique=True
     date_added: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     price: Mapped[Optional[float]] = mapped_column()
 

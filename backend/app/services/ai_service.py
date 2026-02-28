@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
+from app.config import settings
 from app.models import User
 from app.repositories import AiRepository, ProductRepository
 from app.schemas import SAiAnalysisResponse, SModelPreset, SSystemAiKeyCreate, ApiProviderPreset
@@ -107,7 +108,7 @@ class AIService:
                 base_url_val = model_record.provider_url
                 model_name_val = model_record.model_name
 
-            http_client = httpx.AsyncClient(proxy="http://127.0.0.1:2080")
+            http_client = httpx.AsyncClient(proxy=settings.HTTP_PROXY if settings.HTTP_PROXY else None)
             try:
                 client = AsyncOpenAI(
                     api_key=api_key_val,

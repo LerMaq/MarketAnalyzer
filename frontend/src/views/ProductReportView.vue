@@ -261,73 +261,89 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    // ШАГ 1: Если чата еще нет, создаем его
+    // 1. Создание чата, если его нет
     if (!chatId.value) {
-    const createRes = await api.post('/chat/create', {
-      product_id: Number(props.id),
-      title: text.substring(0, 30) + "..."
-    });
-    chatId.value = createRes.data.id;
-    // ОБНОВЛЯЕМ СПИСОК: Добавляем новый чат в начало списка
-    myChats.value.unshift(createRes.data);
-}
+      const createRes = await api.post('/chat/create', {
+        product_id: Number(props.id),
+        title: text.substring(0, 30) + "..."
+      });
+      chatId.value = createRes.data.id;
+      myChats.value.unshift(createRes.data);
+    }
 
-    // ШАГ 2: Запускаем стрим ответа ИИ, используя chatId
+    // 2. Запрос к стриму
     const response = await fetch(`${import.meta.env.VITE_API_URL}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // ОБЯЗАТЕЛЬНО: разрешает отправку куки сессии
+      credentials: 'include',
       body: JSON.stringify({
         chat_id: Number(chatId.value),
         message_text: text
       })
     })
 
-    if (response.status === 422) {
+    if (!response.ok) {
       const errorData = await response.json();
-      console.error("Ошибка валидации:", errorData);
+      console.error("Ошибка стрима:", errorData);
       isStreaming.value = false;
       return;
     }
 
-    // Чтение потока (оставляем без изменений)
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
+    let leftover = ''; // ОБЯЗАТЕЛЬНО ОБЪЯВЛЯЕМ ЗДЕСЬ
 
     while (true) {
       const { value, done } = await reader.read()
-      if (done) break
 
-      const chunk = decoder.decode(value)
+      // Если поток завершен, обрабатываем последний кусок и выходим
+      if (done) {
+        if (streamingText.value) {
+          messages.value.push({ role: 'assistant', content: streamingText.value });
+          streamingText.value = '';
+        }
+        isStreaming.value = false;
+        scrollToBottom();
+        break;
+      }
+
+      // Декодируем и склеиваем с остатком
+      const chunk = leftover + decoder.decode(value, { stream: true })
       const lines = chunk.split('\n')
 
+      // Сохраняем последний (возможно неполный) кусок строки
+      leftover = lines.pop() || '';
+
       for (const line of lines) {
-        if (!line.trim() || !line.startsWith('data: ')) continue;
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
 
-        const content = line.replace('data: ', '').trim();
+        // Обработка маркера завершения
+        if (trimmedLine.includes('[DONE]')) {
+          // Если в строке с [DONE] был полезный текст, забираем его
+          let finalPart = trimmedLine.replace('data: ', '').replace('[DONE]', '').trim();
+          if (finalPart) streamingText.value += finalPart;
 
-        // 1. Проверяем маркер завершения (более надежно)
-        if (content.includes('[DONE]')) {
-          // Сохраняем накопленный текст в основной массив сообщений
-          if (streamingText.value) {
-            messages.value.push({ role: 'assistant', content: streamingText.value });
-          }
-          // СБРАСЫВАЕМ СОСТОЯНИЕ
+          messages.value.push({ role: 'assistant', content: streamingText.value });
           streamingText.value = '';
-          isStreaming.value = false; // Это разблокирует ввод
-          scrollToBottom();
-          break;
-        }
-
-        // 2. Проверяем ошибки
-        if (content.startsWith('Error:')) {
-          alert("Ошибка ИИ: " + content);
           isStreaming.value = false;
-          break;
+          scrollToBottom();
+          return; // Важно: полностью выходим из функции
         }
 
-        // 3. Если это не служебная информация — добавляем в текст
+        // Извлекаем данные
+        let content = '';
+        if (trimmedLine.startsWith('data: ')) {
+          content = trimmedLine.replace('data: ', '');
+        } else {
+          // Если бэк прислал строку без префикса (как мы видели в Swagger)
+          content = trimmedLine;
+        }
+
+        // Добавляем контент к результату
         streamingText.value += content;
+
+        await nextTick();
         scrollToBottom();
       }
     }

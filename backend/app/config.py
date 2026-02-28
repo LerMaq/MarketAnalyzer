@@ -1,13 +1,13 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
-from typing import List, Any
+from typing import List, Any, Optional
 
 
 class Settings(BaseSettings):
     app_name: str = "MarketAnalyzer API"
     debug: bool = True
     DATABASE_URL: str
-    SECRET_KEY: str
+    HTTP_PROXY: Optional[str] = None
 
     # Меняем тип на Any, чтобы Pydantic не паниковал при получении строки
     CORS_ORIGINS: Any = [

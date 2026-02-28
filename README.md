@@ -1,7 +1,3 @@
-Шаблон backend/.env:
-```
-database_url=postgresql+asyncpg://DB_USER:DB_PASS@DB_HOST:DB_PORT/DB_NAME
-```
 ## Быстрый старт
 
 ### Предварительные требования
@@ -13,8 +9,8 @@ database_url=postgresql+asyncpg://DB_USER:DB_PASS@DB_HOST:DB_PORT/DB_NAME
 
 ### Настройка перед запуском
 
-- Создать backend\.env по шаблону
-- Создать frontend\.env по шаблону
+- Создать backend\.env по шаблону (.env.example)
+- Создать frontend\.env по шаблону (.env.example)
 - Заполнить БД стартовыми данными (backend\scripts\seed_db.py)
 
 ### Локальная разработка
