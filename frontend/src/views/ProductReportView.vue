@@ -33,7 +33,10 @@
           </div>
 
           <div :class="['summary-content', { expanded: isSummaryExpanded }]">
-            <p>{{ product.summary?.text }}</p>
+            <div v-if="product.summary?.text"
+                 v-html="md.render(product.summary.text)"
+                 class="markdown-body">
+            </div>
           </div>
         </div>
         <div class="metrics-grid">
@@ -96,16 +99,17 @@
             </div>
           </div>
 
-          <div class="chat-messages" ref="chatBox">
+          <div class="chat-messages" ref="chatBox" @scroll="handleScroll">
             <div v-if="messages.length === 0" class="empty-chat">
               Спросите что-нибудь о товаре, например: <br/>
               <em>"Есть ли проблемы с активацией в моем регионе?"</em>
             </div>
             <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
-              <div class="bubble">{{ msg.content }}</div>
+              <div class="bubble markdown-body" v-html="md.render(msg.content)"></div>
             </div>
+
             <div v-if="streamingText" class="message assistant">
-              <div class="bubble streaming">{{ streamingText }}</div>
+              <div class="bubble streaming markdown-body" v-html="md.render(streamingText)"></div>
             </div>
           </div>
 
@@ -116,9 +120,13 @@
               placeholder="Введите вопрос..."
               :disabled="isStreaming"
             />
-            <button @click="sendMessage" :disabled="isStreaming || !userInput">
-              <span v-if="!isStreaming">➤</span>
-              <span v-else class="loader"></span>
+
+            <button v-if="isStreaming" @click="stopGeneration" class="stop-btn" title="Остановить">
+              <span class="stop-icon">■</span>
+            </button>
+
+            <button v-else @click="sendMessage" :disabled="!userInput">
+              <span>➤</span>
             </button>
           </div>
         </div>
@@ -164,7 +172,9 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import api from '../api/client'
+import MarkdownIt from 'markdown-it'
 
+const md = new MarkdownIt({ breaks: true, linkify: true })
 const props = defineProps(['article', 'id'])
 const product = ref(null)
 const messages = ref([])
@@ -177,6 +187,8 @@ const myChats = ref([]) // Список всех чатов по этому то
 const isChatsMenuOpen = ref(false) // Состояние выпадающего списка
 const selectedMetric = ref(null); // Метрика для модального окна
 const isSummaryExpanded = ref(false);
+const abortController = ref(null) // Хранит текущий контроллер запроса
+
 
 const toggleSummary = () => {
   isSummaryExpanded.value = !isSummaryExpanded.value;
@@ -232,6 +244,49 @@ onMounted(async () => {
   }
 })
 
+
+const syncMessagesWithRetry = async (maxAttempts = 3, delay = 500) => {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await api.get(`/chat/${chatId.value}/messages`);
+      if (res.data && res.data.length > 0) {
+        const lastMsg = res.data[res.data.length - 1];
+
+        // Если последнее сообщение в БД — это ответ ассистента,
+        // значит фоновая задача на бэке отработала успешно
+        if (lastMsg.role === 'assistant') {
+          messages.value = res.data.map(m => ({
+            role: m.role,
+            content: m.message_text
+          }));
+          streamingText.value = ''; // ТЕПЕРЬ МОЖНО УДАЛЯТЬ ПОТОК
+          return true;
+        }
+      }
+    } catch (e) {
+      console.error("Попытка синхронизации не удалась:", e);
+    }
+
+    // Если еще не сохранилось, ждем перед следующей попыткой
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  // Если все попытки провалены (редкий случай), просто гасим поток
+  streamingText.value = '';
+  return false;
+};
+
+const stopGeneration = async () => {
+  if (abortController.value) {
+    abortController.value.abort();
+    isStreaming.value = false;
+
+    // Запускаем умную синхронизацию
+    // Она будет пробовать 3 раза: через 500мс, 1000мс и 1500мс
+    await syncMessagesWithRetry(3, 500);
+  }
+};
+
 const getScoreColor = (s) => {
   if (s > 75) return '#00c853'
   if (s > 50) return '#ff9100'
@@ -251,105 +306,107 @@ const scrollToBottom = async () => {
   }
 }
 
+const userIsScrolling = ref(false)
+
+// Функция слежения за скроллом
+const handleScroll = () => {
+  if (!chatBox.value) return
+  const { scrollTop, scrollHeight, clientHeight } = chatBox.value
+  // Если пользователь поднялся выше чем на 100px от дна — отключаем автоскролл
+  userIsScrolling.value = scrollHeight - scrollTop - clientHeight > 100
+}
+
 const sendMessage = async () => {
   if (!userInput.value || isStreaming.value) return
+
+  abortController.value = new AbortController()
 
   const text = userInput.value
   messages.value.push({ role: 'user', content: text })
   userInput.value = ''
   isStreaming.value = true
+  streamingText.value = ''
+
+  await nextTick()
   scrollToBottom()
 
   try {
-    // 1. Создание чата, если его нет
     if (!chatId.value) {
       const createRes = await api.post('/chat/create', {
         product_id: Number(props.id),
         title: text.substring(0, 30) + "..."
-      });
-      chatId.value = createRes.data.id;
-      myChats.value.unshift(createRes.data);
+      })
+      chatId.value = createRes.data.id
+      myChats.value.unshift(createRes.data)
     }
 
-    // 2. Запрос к стриму
     const response = await fetch(`${import.meta.env.VITE_API_URL}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      signal: abortController.value.signal, // КРИТИЧНО: привязываем сигнал к fetch
       body: JSON.stringify({
         chat_id: Number(chatId.value),
         message_text: text
       })
     })
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Ошибка стрима:", errorData);
-      isStreaming.value = false;
-      return;
-    }
-
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
-    let leftover = ''; // ОБЯЗАТЕЛЬНО ОБЪЯВЛЯЕМ ЗДЕСЬ
+    let leftover = ''
 
     while (true) {
       const { value, done } = await reader.read()
 
-      // Если поток завершен, обрабатываем последний кусок и выходим
-      if (done) {
-        if (streamingText.value) {
-          messages.value.push({ role: 'assistant', content: streamingText.value });
-          streamingText.value = '';
-        }
-        isStreaming.value = false;
-        scrollToBottom();
-        break;
-      }
+      if (done) break
 
-      // Декодируем и склеиваем с остатком
       const chunk = leftover + decoder.decode(value, { stream: true })
       const lines = chunk.split('\n')
-
-      // Сохраняем последний (возможно неполный) кусок строки
-      leftover = lines.pop() || '';
+      leftover = lines.pop() || ''
 
       for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) continue;
+        const trimmed = line.trim()
+        if (!trimmed) continue
 
-        // Обработка маркера завершения
-        if (trimmedLine.includes('[DONE]')) {
-          // Если в строке с [DONE] был полезный текст, забираем его
-          let finalPart = trimmedLine.replace('data: ', '').replace('[DONE]', '').trim();
-          if (finalPart) streamingText.value += finalPart;
-
-          messages.value.push({ role: 'assistant', content: streamingText.value });
-          streamingText.value = '';
-          isStreaming.value = false;
-          scrollToBottom();
-          return; // Важно: полностью выходим из функции
+        if (trimmed.includes('[DONE]')) {
+          // Выходим из цикла обработки строк, чтобы сработал финальный запрос к БД
+          break
         }
 
-        // Извлекаем данные
-        let content = '';
-        if (trimmedLine.startsWith('data: ')) {
-          content = trimmedLine.replace('data: ', '');
-        } else {
-          // Если бэк прислал строку без префикса (как мы видели в Swagger)
-          content = trimmedLine;
+        let content = trimmed.startsWith('data: ') ? trimmed.replace('data: ', '') : trimmed
+        streamingText.value += content
+
+        // Скроллим вниз только если юзер не отмотал вверх
+        if (!userIsScrolling.value) {
+          await nextTick()
+          scrollToBottom()
         }
-
-        // Добавляем контент к результату
-        streamingText.value += content;
-
-        await nextTick();
-        scrollToBottom();
       }
+
+      // Если в куске текста был [DONE], прерываем чтение потока вообще
+      if (chunk.includes('[DONE]')) break
     }
+
+    // --- ФИНАЛЬНЫЙ ШАГ: Незаметная подмена ---
+    const finalData = await api.get(`/chat/${chatId.value}/messages`)
+    if (finalData.data) {
+      // Обновляем весь массив сообщений данными из БД
+      messages.value = finalData.data.map(m => ({
+        role: m.role,
+        content: m.message_text
+      }))
+    }
+
   } catch (e) {
-    console.error("Ошибка при отправке:", e);
-    isStreaming.value = false;
+    console.error("Ошибка стрима:", e)
+  } finally {
+    isStreaming.value = false
+
+    if (!abortController.value?.signal.aborted) {
+       await syncMessagesWithRetry(2, 300);
+    }
+    await nextTick();
+    if (!userIsScrolling.value) scrollToBottom();
   }
 }
 </script>
@@ -589,5 +646,75 @@ const sendMessage = async () => {
   height: 40px;
   background: linear-gradient(transparent, #f0f6ff); /* Цвет должен совпадать с фоном карточки */
   pointer-events: none;
+}
+/* Правим пузыри для работы с Markdown */
+:deep(.markdown-body) {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+:deep(.markdown-body p) {
+  margin-bottom: 8px; /* Расстояние между абзацами */
+}
+
+:deep(.markdown-body p:last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.markdown-body ul), :deep(.markdown-body ol) {
+  padding-left: 20px; /* Умеренный отступ для списков */
+  margin: 8px 0;
+}
+
+:deep(.markdown-body li) {
+  margin-bottom: 4px;
+}
+
+:deep(.markdown-body strong) {
+  font-weight: 700;
+}
+
+/* Стили для скроллбара (опционально, для красоты) */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 3px;
+}
+/* Убираем внешний отступ у первого абзаца внутри сообщения */
+.message .bubble :deep(p:first-child) {
+  margin-top: 0 !important;
+}
+
+/* Убираем внешний отступ у последнего абзаца, чтобы снизу тоже было ровно */
+.message .bubble :deep(p:last-child) {
+  margin-bottom: 0 !important;
+}
+
+/* Если ИИ использует заголовки (h1, h2, h3), у них тоже убираем верхний отступ, если они идут первыми */
+.message .bubble :deep(h1:first-child),
+.message .bubble :deep(h2:first-child),
+.message .bubble :deep(h3:first-child) {
+  margin-top: 0 !important;
+}
+
+/* Настраиваем стандартный отступ для параграфов, которые идут в середине текста */
+.message .bubble :deep(p) {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+.stop-btn {
+  background: #ff5252 !important; /* Красный цвет для кнопки отмены */
+  color: white;
+}
+
+.stop-icon {
+  font-size: 1.2rem;
+}
+
+/* Анимация пульсации, чтобы кнопку было заметнее */
+.stop-btn:hover {
+  background: #ff1744 !important;
 }
 </style>

@@ -5,17 +5,34 @@
       <p>Узнайте, что на самом деле думают покупатели, с помощью ИИ.</p>
     </div>
 
-    <div class="search-box">
-      <input
-        v-model="urlOrId"
-        placeholder="Вставьте ссылку на Ozon или артикул"
-        @keyup.enter="handleSearch"
-        :disabled="isLoading"
-      />
-      <button @click="handleSearch" :disabled="isLoading">
-        <span v-if="!isLoading">Анализировать</span>
-        <span v-else class="mini-spinner"></span>
-      </button>
+    <div class="search-container">
+      <div class="search-box">
+        <input
+          v-model="urlOrId"
+          placeholder="Вставьте ссылку на Ozon или артикул"
+          @keyup.enter="handleSearch"
+          @focus="isFocused = true"
+          @blur="isFocused = false"
+          :disabled="isLoading"
+        />
+        <button @click="handleSearch" :disabled="isLoading">
+          <span v-if="!isLoading">Анализировать</span>
+          <span v-else class="mini-spinner"></span>
+        </button>
+      </div>
+
+      <ul v-if="isFocused && recentIds.length > 0" class="suggestions-list">
+        <li
+          v-for="id in recentIds"
+          :key="id"
+          @mousedown="selectFromHistory(id)"
+        >
+          {{ id }}
+        </li>
+        <li class="clear-history-item" @mousedown="clearHistory">
+          Очистить историю
+        </li>
+      </ul>
     </div>
 
     <div v-if="taskStatus && taskStatus !== 'completed'" class="loading-status">
@@ -32,7 +49,7 @@
             <span class="date">{{ new Date(v.date_added).toLocaleDateString() }}</span>
             <span class="time">{{ new Date(v.date_added).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
           </div>
-          <button @click="$router.push(`/product/${urlOrId}/${v.id}`)" class="open-btn">
+          <button @click="$router.push(`/product/${getOzonId(urlOrId)}/${v.id}`)" class="open-btn">
             Открыть отчет
           </button>
         </div>
@@ -47,48 +64,76 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import api from '../api/client'
 import { useRouter } from 'vue-router'
 
-const router = useRouter() // 2. Инициализируем объект router
+const router = useRouter()
 
 const urlOrId = ref('')
 const versions = ref([])
 const isLoading = ref(false)
 const taskStatus = ref(null)
+const recentIds = ref([])
+const isFocused = ref(false)
+
+const getOzonId = (input) => {
+  if (!input) return null;
+  const match = input.match(/(\d{9,})/);
+  return match ? match[0] : input;
+};
+
+
+onMounted(() => {
+  const saved = localStorage.getItem('recent_ozon_ids')
+  if (saved) {
+    recentIds.value = JSON.parse(saved)
+  }
+})
+
+const addToHistory = (id) => {
+  if (!id) return
+  const ozonId = getOzonId(id);
+  if (!ozonId) return;
+
+  const filtered = recentIds.value.filter(item => item !== ozonId)
+  recentIds.value = [ozonId, ...filtered].slice(0, 5)
+  localStorage.setItem('recent_ozon_ids', JSON.stringify(recentIds.value))
+}
+
+const selectFromHistory = (id) => {
+  urlOrId.value = id
+  isFocused.value = false
+  handleSearch()
+}
+
+const clearHistory = () => {
+  recentIds.value = []
+  localStorage.removeItem('recent_ozon_ids')
+  isFocused.value = false
+}
 
 const handleSearch = async () => {
-  // 1. Проверяем именно urlOrId (как в твоем оригинале)
-  if (!urlOrId.value) return
+  const ozonId = getOzonId(urlOrId.value);
+  if (!ozonId) return;
 
+
+  isFocused.value = false
+  addToHistory(urlOrId.value)
   isLoading.value = true
-  // Сбрасываем старые состояния
   versions.value = []
 
   try {
-    // 2. Убедись, что тут urlOrId.value, а не ozonId
-    const res = await api.get(`/products/check/${urlOrId.value}`)
-
-    // В новом бэкенде данные приходят в объекте { ozon_id: ..., versions: [] }
+    const res = await api.get(`/products/check/${ozonId}`)
     const foundVersions = res.data.versions || []
 
     if (foundVersions.length > 0) {
-      // ТОВАР НАЙДЕН
       versions.value = foundVersions
       isLoading.value = false
-
-      // Если хочешь сразу перекидывать на последний отчет:
-      // const latestId = foundVersions[0].id
-      // router.push(`/report/${latestId}`)
-
     } else {
-      // ТОВАР НОВЫЙ (бэкенд вернул 200 и пустой массив)
-      console.log("Товар новый, запускаем анализ...")
-      await startNewTask() // Вызываем твою функцию запуска задачи
+      await startNewTask()
     }
   } catch (e) {
-    // Если мы здесь, значит либо переменная не определена, либо сеть упала
     console.error("Детали ошибки:", e)
     alert('Ошибка при связи с сервером')
     isLoading.value = false
@@ -100,13 +145,9 @@ const startNewTask = async () => {
     const res = await api.post('/tasks/add', {
       url_or_id: urlOrId.value
     });
-
-    // ВАЖНО: Проверьте имя поля.
-    // Если бэк присылает { task_id: ... }, то пишем res.data.task_id
     const newTaskId = res.data.task_id;
 
     if (newTaskId) {
-      // Запускаем опрос, передавая полученный ID
       pollTaskStatus(newTaskId);
     } else {
       console.error("Сервер не вернул ID задачи:", res.data);
@@ -126,9 +167,6 @@ const pollTaskStatus = (taskId) => {
       if (taskData.status === 'completed') {
         clearInterval(interval);
         isLoading.value = false;
-
-        // Перенаправляем на страницу товара по вашему формату:
-        // /product/ОЗОН_ИД/АЙДИ_ПРОДУКТА
         if (taskData.ozon_id && taskData.product_id) {
           router.push(`/product/${taskData.ozon_id}/${taskData.product_id}`);
         } else {
@@ -141,8 +179,6 @@ const pollTaskStatus = (taskId) => {
       }
     } catch (e) {
       console.error("Ошибка опроса статуса:", e);
-      // Если это не системная ошибка роутера, а ошибка сети — лучше не сбрасывать интервал сразу
-      // clearInterval(interval);
     }
   }, 2000);
 };
@@ -172,7 +208,12 @@ const pollTaskStatus = (taskId) => {
   font-size: 1.1rem;
 }
 
-/* Поиск */
+/* Search Container */
+.search-container {
+  position: relative;
+  margin-bottom: 3rem;
+}
+
 .search-box {
   display: flex;
   gap: 12px;
@@ -180,7 +221,8 @@ const pollTaskStatus = (taskId) => {
   padding: 12px;
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0, 91, 255, 0.1);
-  margin-bottom: 3rem;
+  position: relative;
+  z-index: 10;
 }
 
 input {
@@ -213,7 +255,53 @@ button {
 button:hover { background: #0046d5; }
 button:disabled { background: #ccc; }
 
+/* Suggestions List */
+.suggestions-list {
+  position: absolute;
+  top: calc(100% - 16px); /* Overlap with the input box */
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 20px 30px rgba(0, 91, 255, 0.1);
+  list-style: none;
+  padding: 28px 12px 12px 12px;
+  margin: 0;
+  z-index: 9;
+  border-top: 1px solid #eee;
+}
+
+.suggestions-list li {
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.suggestions-list li:hover {
+  background-color: #f0f6ff;
+}
+
+.clear-history-item {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+  color: #999 !important;
+  font-size: 0.85rem !important;
+}
+
+.clear-history-item:hover {
+  color: #f56c6c !important;
+  background: none !important;
+}
+
+
 /* Версии */
+.versions-section {
+  margin-top: 3rem;
+}
+
 .versions-section h3 {
   margin-bottom: 1.5rem;
   color: #333;

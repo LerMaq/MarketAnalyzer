@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -14,20 +14,16 @@ router = APIRouter(prefix="/chat", tags=["AI Chat Stream"])
 
 @router.post("/stream")
 async def chat_stream(
-        data: SMessageCreate,
-        user: Optional[User] = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+    data: SMessageCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     service = ChatService(db)
-
     return StreamingResponse(
-        service.get_chat_history_stream(user, data.chat_id, data.message_text),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
+        service.get_chat_history_stream(user, data.chat_id, data.message_text, request, background_tasks),
+        media_type="text/event-stream"
     )
 
 

@@ -1,9 +1,11 @@
+import asyncio
 from typing import AsyncGenerator, Optional
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Request
 
 from app.models import User
 from app.repositories import ChatRepository, UserRepository
 from app.services.ai_service import AIService
+from app.database import new_session # Импортируем твой сессионмейкер
 from app.models.chat import Chat
 
 
@@ -54,7 +56,7 @@ class ChatService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Чат не найден или доступ запрещен")
         return {"status": "deleted"}
 
-    async def get_chat_history_stream(self, user: User, chat_id: int, message_text: str) -> AsyncGenerator[str, None]:
+    async def get_chat_history_stream(self, user, chat_id, message_text, request, background_tasks):
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
 
@@ -100,15 +102,21 @@ class ChatService:
         text_stream = await self.ai_service.execute(chat_config, messages, model_record)
         full_reply = []
 
-        async for text_chunk in text_stream:
-            full_reply.append(text_chunk)
-            yield f"data: {text_chunk}\n\n"
+        try:
+            async for text_chunk in text_stream:
+                if await request.is_disconnected():
+                    break
+                full_reply.append(text_chunk)
+                yield f"data: {text_chunk}\n\n"
+        finally:
+            # Когда стрим окончен (сам или по кнопке Стоп)
+            if full_reply:
+                reply_text = "".join(full_reply)
+                # Добавляем задачу в фон, чтобы FastAPI выполнил её после закрытия коннекта
+                background_tasks.add_task(self._bg_save_message, chat_id, reply_text)
 
-        yield "data: [DONE]\\n\\n"
-
-        if full_reply:
-            reply_text = "".join(full_reply)
-            await self.repo.save_message(chat_id, "assistant", reply_text)
-
-            if is_using_system_key:
-                await self.user_repo.increment_usage(user.id, chat=True)
+    async def _bg_save_message(self, chat_id: int, text: str):
+        """Фоновое сохранение через новую независимую сессию"""
+        async with new_session() as db:
+            repo = ChatRepository(db)  # Создаем репозиторий с новой сессией
+            await repo.save_message(chat_id, "assistant", text)
