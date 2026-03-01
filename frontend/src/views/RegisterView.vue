@@ -1,6 +1,10 @@
 <template>
   <div class="auth-page">
-    <h1>Вход в систему</h1>
+    <h1>Регистрация</h1>
+    <div class="field">
+      <label>Имя</label>
+      <input v-model="name" />
+    </div>
     <div class="field">
       <label>Email</label>
       <input v-model="email" type="email" />
@@ -10,9 +14,9 @@
       <input v-model="password" type="password" />
     </div>
     <div class="actions">
-      <button @click="doLogin">Войти</button>
+      <button @click="doRegister">Зарегистрироваться</button>
     </div>
-    <p>Нет аккаунта? <router-link to="/register">Зарегистрироваться</router-link></p>
+    <p>Уже есть аккаунт? <router-link to="/login">Войти</router-link></p>
   </div>
 </template>
 
@@ -21,16 +25,17 @@ import { ref } from 'vue'
 import auth from '../auth'
 import { useRouter } from 'vue-router'
 
+const name = ref('')
 const email = ref('')
 const password = ref('')
 const router = useRouter()
 
-const doLogin = async () => {
+const doRegister = async () => {
   try {
-    await auth.login(email.value, password.value)
+    await auth.register(email.value, password.value, name.value)
     router.push('/profile')
   } catch (e) {
-    alert(e.response?.data?.detail || 'Ошибка входа')
+    alert(e.response?.data?.detail || 'Ошибка регистрации')
   }
 }
 </script>

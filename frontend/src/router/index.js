@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import ProductReportView from '../views/ProductReportView.vue'
+import ProfileView from '../views/ProfileView.vue'
+import RegisterView from '../views/RegisterView.vue'
 
 const routes = [
   {
@@ -12,6 +14,16 @@ const routes = [
     path: '/login',
     name: 'login',
     component: () => import('../views/LoginView.vue') // Ленивая загрузка
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: RegisterView
+  },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: ProfileView
   },
   {
     // :article — артикул Ozon, :id — ID записи в БД

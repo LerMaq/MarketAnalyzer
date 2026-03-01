@@ -95,3 +95,14 @@ class UserRepository:
 
         await self.db.execute(query)
         await self.db.commit()
+
+    async def update_user(self, user_id: int, update_data: dict) -> User:
+        await self.db.execute(update(User).where(User.id == user_id).values(**update_data))
+        await self.db.commit()
+
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        return result.scalar_one()
+
+    async def change_password(self, user_id: int, new_hashed_password: str):
+        await self.db.execute(update(User).where(User.id == user_id).values(password=new_hashed_password))
+        await self.db.commit()
