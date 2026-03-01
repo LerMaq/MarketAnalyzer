@@ -102,10 +102,13 @@
           <div class="chat-messages" ref="chatBox" @scroll="handleScroll">
             <div v-if="messages.length === 0" class="empty-chat">
               Спросите что-нибудь о товаре, например: <br/>
-              <em>"Есть ли проблемы с активацией в моем регионе?"</em>
+              <em>"{{ randomPlaceholder }}"</em>
             </div>
             <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
-              <div class="bubble markdown-body" v-html="md.render(msg.content)"></div>
+              <div class="bubble-wrapper">
+                <div class="bubble markdown-body" v-html="md.render(msg.content)"></div>
+                <span v-if="msg.time" class="msg-time">{{ msg.time }}</span>
+              </div>
             </div>
 
             <div v-if="streamingText" class="message assistant">
@@ -190,6 +193,26 @@ const isSummaryExpanded = ref(false);
 const abortController = ref(null) // Хранит текущий контроллер запроса
 
 
+const placeholders = [
+  "Какие главные недостатки выделяют покупатели?",
+  "Стоит ли этот товар своих денег?",
+  "Есть ли смысл переплачивать за этот бренд?",
+  "Что чаще всего ломается у этого товара?"
+];
+
+// Выбираем случайный при загрузке компонента
+const randomPlaceholder = ref(placeholders[Math.floor(Math.random() * placeholders.length)]);
+
+
+const formatMessages = (data) => {
+  return data.map(m => ({
+    role: m.role,
+    content: m.message_text,
+    time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }))
+}
+
+
 const toggleSummary = () => {
   isSummaryExpanded.value = !isSummaryExpanded.value;
 };
@@ -208,10 +231,7 @@ const loadChatMessages = async (id) => {
   try {
     const res = await api.get(`/chat/${id}/messages`)
     chatId.value = id
-    messages.value = res.data.map(m => ({
-      role: m.role,
-      content: m.message_text
-    }))
+    messages.value = formatMessages(res.data)
     isChatsMenuOpen.value = false
     scrollToBottom()
   } catch (e) {
@@ -255,10 +275,7 @@ const syncMessagesWithRetry = async (maxAttempts = 3, delay = 500) => {
         // Если последнее сообщение в БД — это ответ ассистента,
         // значит фоновая задача на бэке отработала успешно
         if (lastMsg.role === 'assistant') {
-          messages.value = res.data.map(m => ({
-            role: m.role,
-            content: m.message_text
-          }));
+          messages.value = formatMessages(res.data);
           streamingText.value = ''; // ТЕПЕРЬ МОЖНО УДАЛЯТЬ ПОТОК
           return true;
         }
@@ -391,10 +408,7 @@ const sendMessage = async () => {
     const finalData = await api.get(`/chat/${chatId.value}/messages`)
     if (finalData.data) {
       // Обновляем весь массив сообщений данными из БД
-      messages.value = finalData.data.map(m => ({
-        role: m.role,
-        content: m.message_text
-      }))
+      messages.value = formatMessages(finalData.data);
     }
 
   } catch (e) {
@@ -716,5 +730,26 @@ const sendMessage = async () => {
 /* Анимация пульсации, чтобы кнопку было заметнее */
 .stop-btn:hover {
   background: #ff1744 !important;
+}
+
+.bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-width: 90%;
+}
+
+.message.user .bubble-wrapper {
+  align-items: flex-end;
+}
+
+.message.assistant .bubble-wrapper {
+  align-items: flex-start;
+}
+
+.msg-time {
+  font-size: 0.7rem;
+  color: #aaa;
+  margin-top: 4px;
+  padding: 0 4px;
 }
 </style>

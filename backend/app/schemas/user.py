@@ -14,3 +14,25 @@ class SUserFullProfile(SUserRead):
 
     class Config:
         from_attributes = True
+
+
+class SUserUpdate(BaseModel):
+    name: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class SUserPasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
+    class Config:
+        from_attributes = True
+
+
+class SSimpleMessage(BaseModel):
+    detail: str
+
+    class Config:
+        from_attributes = True
