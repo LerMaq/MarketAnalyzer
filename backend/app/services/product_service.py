@@ -1,8 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
+from typing import List
 
 from app.repositories import ProductRepository
-from app.schemas import SProductCheck, SProductFull, SProductVersionsList, SProductVersion, SAiAnalysisResponse
+from app.schemas import SProductCheck, SProductFull, SProductVersionsList, SProductVersion, SAiAnalysisResponse, SProductTopItem
 from app.models import Product, AiSummary, ProductMetric
 
 
@@ -50,6 +51,41 @@ class ProductService:
                 score = 0.0
         product.score = score
         return SProductFull.model_validate(product)
+
+    async def get_top_products(self, limit: int = 10) -> List[SProductTopItem]:
+        """
+        Топ товаров: уникальные по ozon_id (самый свежий),
+        отсортированные по средневзвешенной оценке.
+        """
+        all_products = await self.product_repo.get_all_products_with_metrics()
+
+        # Дедупликация: оставляем продукт с наибольшим id для каждого ozon_id
+        latest_by_ozon: dict[int, Product] = {}
+        for p in all_products:
+            if p.ozon_id not in latest_by_ozon or p.id > latest_by_ozon[p.ozon_id].id:
+                latest_by_ozon[p.ozon_id] = p
+
+        # Рассчитываем score для каждого уникального продукта
+        scored = []
+        for product in latest_by_ozon.values():
+            if not product.product_metrics:
+                score = 0.0
+            else:
+                total_weight = sum(pm.metric.weight for pm in product.product_metrics)
+                if total_weight > 0:
+                    score = sum(pm.score * pm.metric.weight for pm in product.product_metrics) / total_weight
+                else:
+                    score = 0.0
+            scored.append(SProductTopItem(
+                id=product.id,
+                ozon_id=product.ozon_id,
+                name=product.name,
+                score=round(score, 2),
+                date_added=product.date_added,
+            ))
+
+        scored.sort(key=lambda x: x.score, reverse=True)
+        return scored[:limit]
 
     async def create_full_product(self, ozon_id: int, raw_content: str, ai_result: SAiAnalysisResponse) -> Product:
         ai_data = ai_result.product

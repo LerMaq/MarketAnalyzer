@@ -60,6 +60,34 @@
         </div>
       </div>
     </div>
+
+    <!-- Топ товаров -->
+    <div v-if="topProducts.length > 0" class="top-section">
+      <h2 class="top-title">🏆 Топ товаров</h2>
+      <p class="top-subtitle">Рейтинг по средневзвешенной оценке ИИ</p>
+      <div class="top-grid">
+        <div
+          v-for="(product, index) in topProducts"
+          :key="product.id"
+          class="top-card"
+          @click="$router.push(`/product/${product.ozon_id}/${product.id}`)"
+        >
+          <div class="top-card-rank" :class="rankClass(index)">{{ index + 1 }}</div>
+          <div class="top-card-body">
+            <div class="top-card-name">{{ product.name }}</div>
+            <div class="top-card-meta">
+              <span class="top-card-score" :class="scoreClass(product.score)">
+                {{ product.score.toFixed(1) }}
+              </span>
+              <span class="top-card-date">
+                {{ new Date(product.date_added).toLocaleDateString() }}
+              </span>
+            </div>
+          </div>
+          <div class="top-card-arrow">→</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -76,6 +104,7 @@ const isLoading = ref(false)
 const taskStatus = ref(null)
 const recentIds = ref([])
 const isFocused = ref(false)
+const topProducts = ref([])
 
 const getOzonId = (input) => {
   if (!input) return null;
@@ -83,11 +112,30 @@ const getOzonId = (input) => {
   return match ? match[0] : input;
 };
 
+const scoreClass = (score) => {
+  if (score >= 7) return 'score-good'
+  if (score >= 4) return 'score-ok'
+  return 'score-bad'
+}
 
-onMounted(() => {
+const rankClass = (index) => {
+  if (index === 0) return 'rank-gold'
+  if (index === 1) return 'rank-silver'
+  if (index === 2) return 'rank-bronze'
+  return ''
+}
+
+onMounted(async () => {
   const saved = localStorage.getItem('recent_ozon_ids')
   if (saved) {
     recentIds.value = JSON.parse(saved)
+  }
+
+  try {
+    const res = await api.get('/products/top')
+    topProducts.value = res.data
+  } catch (e) {
+    console.error('Ошибка загрузки топа товаров:', e)
   }
 })
 
@@ -374,4 +422,137 @@ button:disabled { background: #ccc; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 .fade-in { animation: fadeIn 0.6s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Топ товаров */
+.top-section {
+  margin-top: 3rem;
+}
+
+.top-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin-bottom: 0.3rem;
+}
+
+.top-subtitle {
+  color: #888;
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}
+
+.top-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: white;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid #eee;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.top-card:hover {
+  transform: translateX(6px);
+  box-shadow: 0 6px 20px rgba(0, 91, 255, 0.1);
+  border-color: #d0e0ff;
+}
+
+.top-card-rank {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #666;
+  background: #f0f0f0;
+  flex-shrink: 0;
+}
+
+.rank-gold {
+  background: linear-gradient(135deg, #ffd700, #ffb800);
+  color: white;
+  box-shadow: 0 3px 10px rgba(255, 184, 0, 0.3);
+}
+
+.rank-silver {
+  background: linear-gradient(135deg, #c0c0c0, #a8a8a8);
+  color: white;
+  box-shadow: 0 3px 10px rgba(168, 168, 168, 0.3);
+}
+
+.rank-bronze {
+  background: linear-gradient(135deg, #cd7f32, #b5651d);
+  color: white;
+  box-shadow: 0 3px 10px rgba(181, 101, 29, 0.3);
+}
+
+.top-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.top-card-name {
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.top-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.top-card-score {
+  font-weight: 800;
+  font-size: 0.9rem;
+  padding: 2px 10px;
+  border-radius: 8px;
+}
+
+.score-good {
+  color: #0d9e5f;
+  background: #e6f9f0;
+}
+
+.score-ok {
+  color: #d4a017;
+  background: #fef9e7;
+}
+
+.score-bad {
+  color: #e74c3c;
+  background: #fdeaea;
+}
+
+.top-card-date {
+  color: #999;
+  font-size: 0.8rem;
+}
+
+.top-card-arrow {
+  color: #ccc;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+.top-card:hover .top-card-arrow {
+  color: #005bff;
+}
 </style>

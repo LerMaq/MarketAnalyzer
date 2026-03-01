@@ -50,3 +50,14 @@ class SProductVersion(BaseModel):
 class SProductVersionsList(BaseModel):
     ozon_id: int
     versions: list[SProductVersion]
+
+
+class SProductTopItem(BaseModel):
+    """Краткая информация о товаре для топа"""
+    id: int
+    ozon_id: int
+    name: str
+    score: float
+    date_added: datetime
+
+    model_config = ConfigDict(from_attributes=True)

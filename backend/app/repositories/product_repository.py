@@ -98,3 +98,15 @@ class ProductRepository:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def get_all_products_with_metrics(self) -> List[Product]:
+        """Все продукты с метриками для расчёта топа"""
+        query = (
+            select(Product)
+            .options(
+                selectinload(Product.product_metrics),
+                selectinload(Product.summary)
+            )
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+

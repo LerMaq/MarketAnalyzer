@@ -1,4 +1,4 @@
-from .product import SProductCheck, SProductFull, SProductCreate, SProductVersion, SProductVersionsList
+from .product import SProductCheck, SProductFull, SProductCreate, SProductVersion, SProductVersionsList, SProductTopItem
 from .review import SReview, SReviewCreate
 from .metric import SProductMetric, SProductMetricCreate
 from .ai_summary import SAiSummary, SAiSummaryCreate
@@ -10,7 +10,7 @@ from .auth import SUserRegister, SUserLogin, SAuthResponse
 from .user import SUserRead, SUserFullProfile
 
 __all__ = [
-    "SProductCheck", "SProductFull", "SProductCreate", "SProductVersion", "SProductVersionsList",
+    "SProductCheck", "SProductFull", "SProductCreate", "SProductVersion", "SProductVersionsList", "SProductTopItem",
     "SReview", "SReviewCreate",
     "SProductMetric", "SProductMetricCreate",
     "SAiSummary", "SAiSummaryCreate",
