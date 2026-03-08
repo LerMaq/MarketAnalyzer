@@ -29,6 +29,25 @@
     </section>
 
     <section class="card">
+      <h3>История запросов на анализ товаров</h3>
+      <div v-if="tasks.length === 0" class="no-tasks">
+        У вас пока нет запросов на анализ.
+      </div>
+      <div v-else class="tasks-list">
+        <div v-for="task in tasks" :key="task.id" class="task-item">
+          <div class="task-info">
+            <span class="task-id">Задача #{{ task.id }}</span>
+            <span class="ozon-id">Ozon ID: {{ task.ozon_id }}</span>
+            <span class="status" :class="task.status">{{ getStatusText(task.status) }}</span>
+          </div>
+          <div v-if="task.product_id" class="task-actions">
+            <button @click="viewReport(task.product_id)">Посмотреть отчет</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
       <button @click="logout" class="logout-btn">Выйти</button>
     </section>
   </div>
@@ -43,6 +62,7 @@ import { useRouter } from 'vue-router'
 const name = ref('')
 const oldPassword = ref('')
 const newPassword = ref('')
+const tasks = ref([])
 
 const loadProfile = async () => {
   try {
@@ -50,6 +70,15 @@ const loadProfile = async () => {
     name.value = res.data.name || ''
   } catch (e) {
     console.error('Ошибка загрузки профиля', e)
+  }
+}
+
+const loadTasks = async () => {
+  try {
+    const res = await api.get('/tasks/my')
+    tasks.value = res.data
+  } catch (e) {
+    console.error('Ошибка загрузки задач', e)
   }
 }
 
@@ -76,7 +105,24 @@ const changePassword = async () => {
   }
 }
 
-onMounted(loadProfile)
+const getStatusText = (status) => {
+  const statuses = {
+    pending: 'Ожидает',
+    processing: 'В обработке',
+    completed: 'Завершена',
+    failed: 'Ошибка'
+  }
+  return statuses[status] || status
+}
+
+const viewReport = (productId) => {
+  router.push(`/product/${productId}`)
+}
+
+onMounted(() => {
+  loadProfile()
+  loadTasks()
+})
 
 const router = useRouter()
 
@@ -87,11 +133,152 @@ const logout = async () => {
 </script>
 
 <style scoped>
-.profile-page { max-width: 700px; margin: 20px auto; }
-.card { background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #eee }
-.field { display:flex; flex-direction:column; gap:6px; margin-bottom:8px }
-.actions { margin-top: 8px }
-input { padding:8px; border-radius:6px; border:1px solid #ddd }
-button { padding:8px 12px; border-radius:6px; background:#005bff; color:white; border:none }
-.logout-btn { background:#f00; }
+.profile-page {
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #333;
+  font-size: 1.2em;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.field label {
+  font-weight: 500;
+  color: #555;
+}
+
+input {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 1em;
+}
+
+input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.actions {
+  margin-top: 16px;
+}
+
+button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #007bff;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 1em;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background: #0056b3;
+}
+
+.logout-btn {
+  background: #dc3545;
+}
+
+.logout-btn:hover {
+  background: #c82333;
+}
+
+.no-tasks {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 20px;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-id {
+  font-weight: bold;
+  color: #333;
+}
+
+.ozon-id {
+  color: #666;
+  font-size: 0.9em;
+}
+
+.status {
+  font-size: 0.9em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.status.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status.processing {
+  background: #cce5ff;
+  color: #004085;
+}
+
+.status.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status.failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.task-actions button {
+  background: #28a745;
+}
+
+.task-actions button:hover {
+  background: #218838;
+}
 </style>

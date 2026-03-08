@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -48,4 +48,12 @@ async def worker_complete(
     
     await service.task_repo.update_status(task_id, status="processing")
     background_tasks.add_task(service.run_ai_analysis_and_finalize, task_id, data)
+
+@router.get("/my", response_model=List[STask])
+async def get_my_tasks(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    service = TaskService(db)
+    return await service.get_user_tasks(user.id)
     return {"status": "processing", "message": "Данные приняты, анализ запущен в фоне"}

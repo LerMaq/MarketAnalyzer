@@ -1,7 +1,7 @@
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.task import Task
-from typing import Optional
+from typing import Optional, List
 
 class TaskRepository:
     def __init__(self, db: AsyncSession):
@@ -31,3 +31,8 @@ class TaskRepository:
         query = update(Task).where(Task.id == task_id).values(status=status, product_id=product_id)
         await self.db.execute(query)
         await self.db.commit()
+
+    async def get_by_user_id(self, user_id: int) -> List[Task]:
+        query = select(Task).where(Task.user_id == user_id).order_by(Task.id.desc())
+        result = await self.db.execute(query)
+        return result.scalars().all()

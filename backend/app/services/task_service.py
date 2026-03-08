@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories import TaskRepository, UserRepository
@@ -84,3 +84,7 @@ class TaskService:
         )
 
         await self.task_repo.update_status(task_id, status="completed", product_id=product.id)
+
+    async def get_user_tasks(self, user_id: int) -> List[STask]:
+        tasks = await self.task_repo.get_by_user_id(user_id)
+        return [STask.model_validate(task) for task in tasks]

@@ -39,6 +39,12 @@ const isAuthenticated = computed(() => !!auth.user.value)
 
 <style>
 /* Глобальные стили, которые нужны везде */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 .app-wrapper {
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #2c3e50;
@@ -52,12 +58,15 @@ const isAuthenticated = computed(() => !!auth.user.value)
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-  cursor: pointer;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 .logo {
   font-size: 1.5rem;
   font-weight: 800;
   color: #005bff;
+  cursor: pointer;
 }
 .logo span { color: #f91155; }
 .container { padding: 2rem 5%; max-width: 1200px; margin: 0 auto; }

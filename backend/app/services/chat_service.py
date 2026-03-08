@@ -99,6 +99,7 @@ class ChatService:
         for m in history:
             messages.append({"role": m.role, "content": m.message_text})
 
+        
         text_stream = await self.ai_service.execute(chat_config, messages, model_record)
         full_reply = []
 
