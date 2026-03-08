@@ -45,6 +45,53 @@ class ChatService:
 
         return await self.repo.get_user_chats_by_product(user.id, product_id)
 
+    # ------------------------------------------------------------------
+    # Методы для управления пользовательскими ключами ИИ
+    # ------------------------------------------------------------------
+    async def get_user_ai_keys(self, user: Optional[User]):
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
+        if "ai_api_key.use" not in user.active_permissions:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет права использовать пользовательский ключ ИИ")
+
+        return await self.repo.get_user_api_keys(user.id)
+
+    async def add_user_ai_key(self, user: Optional[User], provider_url: str, key: str, model_name: str):
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
+        if "ai_api_key.use" not in user.active_permissions:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет права использовать пользовательский ключ ИИ")
+
+        return await self.repo.create_user_api_key(user.id, provider_url, key, model_name)
+
+    async def activate_user_ai_key(self, user: Optional[User], key_id: int | None):
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
+        if "ai_api_key.use" not in user.active_permissions:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет права использовать пользовательский ключ ИИ")
+
+        await self.repo.set_active_user_api_key(user.id, key_id)
+        return {"status": "active_set"}
+
+    async def delete_user_ai_key(self, user: Optional[User], key_id: int):
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
+        if "ai_api_key.use" not in user.active_permissions:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет права использовать пользовательский ключ ИИ")
+
+        # Получить ключ для проверки
+        key = await self.repo.get_user_api_key_by_id(user.id, key_id)
+        if not key:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ключ не найден")
+
+        # Если ключ активный, сбросить активность
+        if key.is_active:
+            await self.repo.set_active_user_api_key(user.id, None)
+
+        # Удалить ключ
+        await self.repo.delete_user_api_key(user.id, key_id)
+        return {"status": "deleted"}
+
     async def remove_chat(self, chat_id: int, user: Optional[User]):
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")

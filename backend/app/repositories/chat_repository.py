@@ -1,4 +1,4 @@
-from sqlalchemy import select, delete, desc
+from sqlalchemy import select, delete, desc, update
 from sqlalchemy.orm import selectinload
 
 from app.models import Product, AiSummary, Chat, ChatMessage, AiApiKey
@@ -89,3 +89,66 @@ class ChatRepository:
         )
         result = await self.db.execute(query)
         return result.scalars().first()
+
+    # ------------------------------------------------------------------
+    # Методы для работы с пользовательскими ключами ИИ
+    # ------------------------------------------------------------------
+    async def get_user_api_keys(self, user_id: int):
+        """Возвращает список всех ключей, принадлежащих пользователю."""
+        query = select(AiApiKey).where(AiApiKey.user_id == user_id)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def create_user_api_key(self, user_id: int, provider_url: str, key: str, model_name: str):
+        """Добавляет новый ключ и делает его активным, деактивируя остальные."""
+        # помечаем все существующие ключи пользователя как неактивные
+        await self.db.execute(
+            update(AiApiKey)
+            .where(AiApiKey.user_id == user_id)
+            .values(is_active=False)
+        )
+
+        new_key = AiApiKey(
+            user_id=user_id,
+            provider_url=provider_url,
+            key=key,
+            model_name=model_name,
+            is_active=True
+        )
+        self.db.add(new_key)
+        await self.db.commit()
+        await self.db.refresh(new_key)
+        return new_key
+
+    async def set_active_user_api_key(self, user_id: int, key_id: int | None):
+        """Устанавливает указанный ключ активным.
+        Если key_id равен None, деактивирует все ключи (будет использоваться системная модель).
+        """
+        # деактивируем все
+        await self.db.execute(
+            update(AiApiKey)
+            .where(AiApiKey.user_id == user_id)
+            .values(is_active=False)
+        )
+
+        if key_id is not None:
+            await self.db.execute(
+                update(AiApiKey)
+                .where(AiApiKey.user_id == user_id, AiApiKey.id == key_id)
+                .values(is_active=True)
+            )
+
+        await self.db.commit()
+
+    async def get_user_api_key_by_id(self, user_id: int, key_id: int):
+        """Получить ключ по ID с проверкой принадлежности пользователю."""
+        query = select(AiApiKey).where(AiApiKey.id == key_id, AiApiKey.user_id == user_id)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def delete_user_api_key(self, user_id: int, key_id: int):
+        """Удалить ключ пользователя."""
+        await self.db.execute(
+            delete(AiApiKey).where(AiApiKey.id == key_id, AiApiKey.user_id == user_id)
+        )
+        await self.db.commit()

@@ -6,7 +6,7 @@
       <h3>Основные данные</h3>
       <div class="field">
         <label>Имя</label>
-        <input v-model="name" />
+        <input v-model="name" autocomplete="off" />
       </div>
       <div class="actions">
         <button @click="updateName">Сохранить имя</button>
@@ -17,11 +17,21 @@
       <h3>Смена пароля</h3>
       <div class="field">
         <label>Старый пароль</label>
-        <input type="password" v-model="oldPassword" />
+        <div class="input-with-icon">
+          <input :type="showOldPassword ? 'text' : 'password'" v-model="oldPassword" autocomplete="off" />
+          <button type="button" class="eye-toggle" @click="showOldPassword = !showOldPassword">
+            {{ showOldPassword ? '🙈' : '👁' }}
+          </button>
+        </div>
       </div>
       <div class="field">
         <label>Новый пароль</label>
-        <input type="password" v-model="newPassword" />
+        <div class="input-with-icon">
+          <input :type="showNewPassword ? 'text' : 'password'" v-model="newPassword" autocomplete="off" />
+          <button type="button" class="eye-toggle" @click="showNewPassword = !showNewPassword">
+            {{ showNewPassword ? '🙈' : '👁' }}
+          </button>
+        </div>
       </div>
       <div class="actions">
         <button @click="changePassword">Сменить пароль</button>
@@ -63,6 +73,10 @@ const name = ref('')
 const oldPassword = ref('')
 const newPassword = ref('')
 const tasks = ref([])
+
+// visibility toggles for password fields
+const showOldPassword = ref(false)
+const showNewPassword = ref(false)
 
 const loadProfile = async () => {
   try {
@@ -178,6 +192,21 @@ input:focus {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon .eye-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em;
 }
 
 .actions {

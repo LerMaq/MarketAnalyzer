@@ -3,11 +3,11 @@
     <h1>Вход в систему</h1>
     <div class="field">
       <label>Email</label>
-      <input v-model="email" type="email" />
+      <input v-model="email" type="email" autocomplete="email" />
     </div>
     <div class="field">
       <label>Пароль</label>
-      <input v-model="password" type="password" />
+      <input v-model="password" type="password" autocomplete="current-password" />
     </div>
     <div class="actions">
       <button @click="doLogin">Войти</button>

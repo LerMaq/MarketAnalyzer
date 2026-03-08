@@ -37,3 +37,23 @@ class SChatShortResponse(BaseModel):
     title: str
     created_at: datetime
     last_message_preview: Optional[str] = None # Для красоты в списке истории
+
+
+# ---- схемы для пользовательских ключей ИИ ------------------------------------------------
+class SAiKeyBase(BaseModel):
+    provider_url: str
+    key: str
+    model_name: str
+
+class SAiKeyCreate(SAiKeyBase):
+    pass
+
+class SAiKeyResponse(SAiKeyBase):
+    id: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+class SAiKeyActivate(BaseModel):
+    key_id: int | None  # None означает «По умолчанию»

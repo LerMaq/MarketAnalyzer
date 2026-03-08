@@ -7,7 +7,16 @@ from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import User
 from app.services import ChatService
-from app.schemas import SMessageCreate, SChatResponse, SChatCreate, SChatShortResponse, SMessageResponse
+from app.schemas import (
+    SMessageCreate,
+    SChatResponse,
+    SChatCreate,
+    SChatShortResponse,
+    SMessageResponse,
+    SAiKeyResponse,
+    SAiKeyCreate,
+    SAiKeyActivate
+)
 
 router = APIRouter(prefix="/chat", tags=["AI Chat Stream"])
 
@@ -64,3 +73,44 @@ async def delete_chat(
 ):
     service = ChatService(db)
     return await service.remove_chat(chat_id, user)
+
+
+# ----------------- управление пользовательскими API-ключами ---------------------------
+@router.get("/keys", response_model=List[SAiKeyResponse])
+async def list_user_ai_keys(
+        user: Optional[User] = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    service = ChatService(db)
+    return await service.get_user_ai_keys(user)
+
+
+@router.post("/keys", response_model=SAiKeyResponse)
+async def create_user_ai_key(
+        data: SAiKeyCreate,
+        user: Optional[User] = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    service = ChatService(db)
+    return await service.add_user_ai_key(user, data.provider_url, data.key, data.model_name)
+
+
+@router.post("/keys/activate")
+async def activate_user_ai_key(
+        data: SAiKeyActivate,
+        user: Optional[User] = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    service = ChatService(db)
+    return await service.activate_user_ai_key(user, data.key_id)
+
+
+@router.delete("/keys/{key_id}")
+async def delete_user_ai_key(
+        key_id: int,
+        user: Optional[User] = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    service = ChatService(db)
+    return await service.delete_user_ai_key(user, key_id)
+

@@ -132,6 +132,24 @@
               <span>➤</span>
             </button>
           </div>
+
+          <!-- выбор модули ИИ -->
+          <div class="model-select-area">
+            <select v-model="selectedKeyId" @change="onModelSelect" class="model-select">
+              <option :value="null">По умолчанию</option>
+              <option v-for="k in userKeys" :key="k.id" :value="k.id">
+                {{ k.model_name }}
+              </option>
+            </select>
+            <button v-if="selectedKeyId !== null" @click="confirmDeleteKey" class="delete-btn" title="Удалить модель">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 512 512">
+                <g>
+                  <path d="M 123.20 510.55 C105.11,506.17 91.63,490.76 89.07,471.50 C88.48,467.10 86.43,444.15 84.50,420.50 C76.32,319.81 61.96,147.64 61.74,147.53 C61.61,147.47 59.04,146.31 56.04,144.96 C39.80,137.65 29.07,117.65 31.67,99.58 C34.54,79.64 49.40,64.12 68.61,60.98 C71.85,60.45 91.71,60.01 112.75,60.01 L 151.00 60.00 L 151.00 51.14 C151.00,46.26 151.46,39.85 152.02,36.89 C155.43,18.93 169.93,4.43 187.89,1.02 C195.14,-0.35 316.86,-0.35 324.11,1.02 C342.07,4.43 356.57,18.93 359.98,36.89 C360.54,39.85 361.00,46.26 361.00,51.14 L 361.00 60.00 L 399.25 60.01 C420.29,60.01 440.15,60.45 443.39,60.98 C462.60,64.12 477.46,79.64 480.33,99.58 C482.93,117.65 472.94,136.45 456.26,144.87 L 450.21 147.93 L 449.58 153.71 C448.99,159.14 435.26,325.00 427.50,420.50 C425.57,444.15 423.52,467.10 422.93,471.50 C420.29,491.29 406.05,507.00 387.20,510.90 C379.00,512.60 130.29,512.26 123.20,510.55 ZM 386.68 479.40 C393.41,474.38 391.93,488.58 414.47,212.50 C416.94,182.25 419.15,155.81 419.39,153.75 L 419.81 150.00 L 256.00 150.00 L 92.19 150.00 L 92.61 153.75 C92.85,155.81 95.06,182.25 97.53,212.50 C113.77,411.39 118.98,471.06 120.35,473.72 C122.11,477.12 124.73,479.57 128.02,480.89 C129.63,481.54 175.00,481.82 257.18,481.69 L 383.85 481.50 L 386.68 479.40 ZM 443.40 117.73 C453.45,111.97 453.23,97.87 443.00,92.12 L 439.23 90.00 L 256.00 90.00 L 72.77 90.00 L 69.00 92.12 C58.77,97.87 58.55,111.97 68.60,117.73 L 72.50 119.97 L 256.00 119.97 L 439.50 119.97 L 443.40 117.73 ZM 331.00 51.52 C331.00,40.41 329.19,35.78 323.54,32.47 L 319.32 30.00 L 256.00 30.00 L 192.68 30.00 L 188.46 32.47 C182.81,35.78 181.00,40.41 181.00,51.52 L 181.00 60.00 L 256.00 60.00 L 331.00 60.00 L 331.00 51.52 ZM 173.42 449.54 C170.83,447.98 168.74,445.71 167.69,443.30 C166.35,440.21 164.63,416.57 158.46,316.54 C151.24,199.35 150.96,193.39 152.52,189.31 C155.64,181.13 164.79,177.81 172.85,181.93 C181.07,186.12 180.07,177.57 188.58,315.67 L 196.17 438.83 L 194.17 443.35 C190.58,451.46 181.26,454.23 173.42,449.54 ZM 248.86 449.84 C246.86,448.68 244.27,446.04 243.11,443.98 L 241.00 440.23 L 241.00 316.00 L 241.00 191.77 L 243.12 188.00 C245.59,183.61 251.40,180.00 256.00,180.00 C260.60,180.00 266.41,183.61 268.88,188.00 L 271.00 191.77 L 271.00 316.00 L 271.00 440.23 L 268.88 444.00 C266.38,448.45 260.57,452.01 255.86,451.98 C254.01,451.96 250.86,451.00 248.86,449.84 ZM 323.66 449.89 C320.93,448.45 319.25,446.56 317.83,443.35 L 315.83 438.83 L 323.42 315.67 C332.00,176.43 330.88,185.71 339.67,181.82 C348.11,178.09 356.39,181.22 359.48,189.31 C361.04,193.39 360.76,199.36 353.55,316.54 C345.10,454.02 346.04,445.90 338.07,449.96 C333.07,452.51 328.60,452.49 323.66,449.89 Z" fill="rgba(0,0,0,1)"/>
+                </g>
+              </svg>
+            </button>
+            <button @click="addUserKey">Добавить модель</button>
+          </div>
         </div>
       </aside>
     </main>
@@ -144,9 +162,9 @@
   <Transition name="fade">
   <div v-if="selectedMetric" class="modal-overlay" @click.self="closeMetricDetails">
     <div class="modal-content">
+      <button @click="closeMetricDetails" class="close-modal modal-close-big">&times;</button>
       <header class="modal-header">
         <h3>{{ selectedMetric.metric.name }}</h3>
-        <button @click="closeMetricDetails" class="close-modal">&times;</button>
       </header>
 
       <div class="modal-body">
@@ -170,10 +188,65 @@
     </div>
   </div>
 </Transition>
+
+<!-- Модалка для подтверждения удаления модели ИИ -->
+<Transition name="fade">
+  <div v-if="showDeleteConfirm" class="modal-overlay">
+    <div class="modal-content delete-confirm-modal">
+      <button @click="cancelDeleteKey" class="close-modal modal-close-big">&times;</button>
+      <header class="modal-header">
+        <h3>Подтверждение удаления</h3>
+      </header>
+
+      <div class="modal-body">
+        <p>Вы уверены, что хотите удалить выбранную модель ИИ? Это действие нельзя отменить.</p>
+
+        <div class="modal-actions">
+          <button type="button" @click="cancelDeleteKey">Отмена</button>
+          <button type="button" @click="submitDeleteKey" class="delete-confirm-btn">Удалить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</Transition>
+<Transition name="fade">
+  <div v-if="showAddKeyModal" class="modal-overlay">
+    <div class="modal-content">
+      <button @click="closeAddKeyModal" class="close-modal modal-close-big">&times;</button>
+      <header class="modal-header">
+        <h3>Добавить пользовательскую модель ИИ</h3>
+      </header>
+
+      <div class="modal-body">
+        <form @submit.prevent="submitAddKey">
+          <div class="form-group">
+            <label for="provider_url">URL провайдера:</label>
+            <input id="provider_url" v-model="newKeyData.provider_url" type="url" autocomplete="off" required />
+          </div>
+
+          <div class="form-group">
+            <label for="key">API ключ:</label>
+            <input id="key" v-model="newKeyData.key" autocomplete="off" required />
+          </div>
+
+          <div class="form-group">
+            <label for="model_name">Название модели:</label>
+            <input id="model_name" v-model="newKeyData.model_name" autocomplete="off" required />
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" @click="closeAddKeyModal">Отмена</button>
+            <button type="submit">Добавить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</Transition>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import api from '../api/client'
 import MarkdownIt from 'markdown-it'
 
@@ -191,6 +264,24 @@ const isChatsMenuOpen = ref(false) // Состояние выпадающего 
 const selectedMetric = ref(null); // Метрика для модального окна
 const isSummaryExpanded = ref(false);
 const abortController = ref(null) // Хранит текущий контроллер запроса
+
+// --- новые состояния для пользовательских моделей ИИ ---
+const userKeys = ref([])
+const selectedKeyId = ref(null) // null означает системную модель (по умолчанию)
+
+// --- модалка для добавления ключа ---
+const showAddKeyModal = ref(false)
+const newKeyData = ref({
+  provider_url: '',
+  key: '',
+  model_name: ''
+})
+
+// --- модалка для подтверждения удаления ---
+const showDeleteConfirm = ref(false)
+const deleteKeyId = ref(null)
+
+
 
 
 const placeholders = [
@@ -259,39 +350,18 @@ onMounted(async () => {
     if (myChats.value.length > 0) {
       await loadChatMessages(myChats.value[0].id)
     }
+
+    // загружаем пользовательские ключи и определяем активный
+    await loadUserKeys()
   } catch (e) {
     console.error("Ошибка загрузки отчета:", e)
   }
 })
 
-
-const syncMessagesWithRetry = async (maxAttempts = 3, delay = 500) => {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      const res = await api.get(`/chat/${chatId.value}/messages`);
-      if (res.data && res.data.length > 0) {
-        const lastMsg = res.data[res.data.length - 1];
-
-        // Если последнее сообщение в БД — это ответ ассистента,
-        // значит фоновая задача на бэке отработала успешно
-        if (lastMsg.role === 'assistant') {
-          messages.value = formatMessages(res.data);
-          streamingText.value = ''; // ТЕПЕРЬ МОЖНО УДАЛЯТЬ ПОТОК
-          return true;
-        }
-      }
-    } catch (e) {
-      console.error("Попытка синхронизации не удалась:", e);
-    }
-
-    // Если еще не сохранилось, ждем перед следующей попыткой
-    await new Promise(resolve => setTimeout(resolve, delay));
-  }
-
-  // Если все попытки провалены (редкий случай), просто гасим поток
-  streamingText.value = '';
-  return false;
-};
+// Watch для отслеживания изменений selectedKeyId
+watch(selectedKeyId, (newVal, oldVal) => {
+  console.log('selectedKeyId changed from', oldVal, 'to', newVal)
+})
 
 const stopGeneration = async () => {
   if (abortController.value) {
@@ -303,6 +373,90 @@ const stopGeneration = async () => {
     await syncMessagesWithRetry(3, 500);
   }
 };
+
+// ------------------------------------------------------------------
+// функции для работы с пользовательскими ключами ИИ
+// ------------------------------------------------------------------
+const loadUserKeys = async () => {
+  try {
+    const res = await api.get('/chat/keys')
+    userKeys.value = res.data
+    const active = userKeys.value.find(k => k.is_active)
+    selectedKeyId.value = active ? active.id : null
+  } catch (e) {
+    console.error('Не удалось получить ключи ИИ пользователя:', e)
+  }
+}
+
+const onModelSelect = async () => {
+  await nextTick() // Ждем обновления v-model
+  const keyId = selectedKeyId.value
+  console.log('onModelSelect called, selectedKeyId:', keyId)
+  try {
+    await api.post('/chat/keys/activate', { key_id: keyId })
+    console.log('Request sent successfully with key_id:', keyId)
+    // Обновляем локально состояние is_active
+    userKeys.value.forEach(k => {
+      k.is_active = (k.id === keyId)
+    })
+  } catch (e) {
+    console.error('Ошибка при переключении модели:', e)
+  }
+}
+
+const addUserKey = async () => {
+  openAddKeyModal()
+}
+
+// обновление: очистка видимости ключа при открытии
+const openAddKeyModal = () => {
+  showAddKeyModal.value = true
+}
+
+// ------------------------------------------------------------------
+// функции для модалки добавления ключа ИИ
+// ------------------------------------------------------------------
+const closeAddKeyModal = () => {
+  showAddKeyModal.value = false
+  newKeyData.value = { provider_url: '', key: '', model_name: '' }
+}
+
+const submitAddKey = async () => {
+  try {
+    await api.post('/chat/keys', newKeyData.value)
+    await loadUserKeys()
+    closeAddKeyModal()
+  } catch (e) {
+    console.error('Не удалось добавить ключ ИИ:', e)
+  }
+}
+
+// ------------------------------------------------------------------
+// функции для удаления ключа ИИ
+// ------------------------------------------------------------------
+const confirmDeleteKey = () => {
+  if (selectedKeyId.value === null) return
+  deleteKeyId.value = selectedKeyId.value
+  showDeleteConfirm.value = true
+}
+
+const submitDeleteKey = async () => {
+  try {
+    await api.delete(`/chat/keys/${deleteKeyId.value}`)
+    await loadUserKeys()
+    selectedKeyId.value = null // Сбрасываем на системную модель
+    showDeleteConfirm.value = false
+    deleteKeyId.value = null
+  } catch (e) {
+    console.error('Не удалось удалить ключ ИИ:', e)
+  }
+}
+
+const cancelDeleteKey = () => {
+  showDeleteConfirm.value = false
+  deleteKeyId.value = null
+}
+
 
 const getScoreColor = (s) => {
   if (s > 75) return '#00c853'
@@ -410,6 +564,8 @@ const sendMessage = async () => {
       // Обновляем весь массив сообщений данными из БД
       messages.value = formatMessages(finalData.data);
     }
+    // Очищаем потоковое сообщение, так как теперь есть финальное из БД
+    streamingText.value = '';
 
   } catch (e) {
     console.error("Ошибка стрима:", e)
@@ -505,7 +661,7 @@ const sendMessage = async () => {
 }
 .chat-header { padding: 15px 20px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 10px; }
 .status-dot { width: 8px; height: 8px; background: #00c853; border-radius: 50%; }
-.chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 5px; }
 .message .bubble { padding: 12px 16px; border-radius: 14px; max-width: 90%; line-height: 1.4; font-size: 0.95rem; }
 .message.user { align-self: flex-end; }
 .message.user .bubble { background: #005bff; color: white; border-bottom-right-radius: 2px; }
@@ -516,6 +672,161 @@ const sendMessage = async () => {
 .chat-input-area { padding: 15px; border-top: 1px solid #f0f0f0; display: flex; gap: 10px; }
 .chat-input-area input { flex: 1; border: 1px solid #eee; padding: 12px; border-radius: 10px; outline: none; }
 .chat-input-area button { background: #005bff; color: white; border: none; width: 45px; border-radius: 10px; cursor: pointer; }
+
+.model-select-area {
+  padding: 10px 15px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-select-area select, .model-select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.model-select-area button {
+  background: #005bff;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.delete-btn {
+  width: 32px;
+  height: 32px;
+  display: contents;
+  align-items: center;
+  font-size: 1.2rem;
+}
+
+
+
+.modal-close-big {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  font-size: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  z-index: 1010;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.close-modal {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #555;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.modal-actions button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modal-actions button[type="button"] {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.modal-actions button[type="submit"] {
+  background: #005bff;
+  color: white;
+}
+
+.delete-confirm-btn {
+  background: #ff5252 !important;
+  color: white;
+}
+
+.delete-confirm-btn:hover {
+  background: #ff1744 !important;
+}
+
+
 
 @keyframes blink { 50% { border-color: transparent; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
