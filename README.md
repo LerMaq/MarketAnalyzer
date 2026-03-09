@@ -11,6 +11,7 @@
 
 - Создать backend\.env по шаблону (.env.example)
 - Создать frontend\.env по шаблону (.env.example)
+- Создать scraper\.env по шаблону (.env.example)
 - Заполнить БД стартовыми данными (backend\scripts\seed_db.py)
 
 ### Локальная разработка
