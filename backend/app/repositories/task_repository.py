@@ -23,7 +23,13 @@ class TaskRepository:
         return result.scalar_one_or_none()
 
     async def get_next_pending(self) -> Optional[Task]:
-        query = select(Task).where(Task.status == "pending").order_by(Task.id.asc()).limit(1)
+        query = (
+            select(Task)
+            .where(Task.status == "pending")
+            .order_by(Task.id.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True) 
+        )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 

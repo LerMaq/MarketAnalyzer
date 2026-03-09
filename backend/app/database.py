@@ -1,10 +1,19 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from app.config import settings
+from sqlalchemy import text
 
 
 Base = declarative_base()
-engine = create_async_engine(settings.DATABASE_URL)
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,      
+    pool_recycle=1800,       
+    connect_args={
+        "command_timeout": 30, 
+        "timeout": 10          
+    }
+)
 new_session = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
@@ -21,7 +30,29 @@ def init_db():
 async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text(SQL_CREATE_FUNCTION))
+        await conn.execute(text(SQL_DROP_TRIGGER))
+        await conn.execute(text(SQL_CREATE_TRIGGER))
 
 async def delete_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+
+
+SQL_CREATE_FUNCTION = """
+CREATE OR REPLACE FUNCTION notify_new_task() RETURNS trigger AS $$
+BEGIN
+  PERFORM pg_notify('new_task_channel', NEW.id::text);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+SQL_DROP_TRIGGER = "DROP TRIGGER IF EXISTS trigger_new_task ON tasks;"
+
+SQL_CREATE_TRIGGER = """
+CREATE TRIGGER trigger_new_task
+AFTER INSERT ON tasks
+FOR EACH ROW EXECUTE FUNCTION notify_new_task();
+"""

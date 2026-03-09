@@ -1,6 +1,7 @@
 from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 from app.repositories import TaskRepository, UserRepository
 from app.utils import extract_ozon_id
 from app.models.user import User
@@ -53,10 +54,43 @@ class TaskService:
 
     async def take_task_for_worker(self, user: Optional[User]) -> Optional[STaskWorkerTake]:
         await self.verify_worker_access(user)
-        
         task = await self.task_repo.get_next_pending()
-        if not task:
+        if task:
+            return await self._mark_and_return(task)
+        await self.db.rollback()
+        notification_queue = asyncio.Queue()
+
+        def on_notification(connection, pid, channel, payload):
+            notification_queue.put_nowait(payload)
+
+        conn = await self.db.connection()
+        raw_conn = await conn.get_raw_connection()
+        driver = getattr(raw_conn, 'driver_connection', None)
+
+        if driver:
+            await driver.add_listener("new_task_channel", on_notification)
+
+        try:
+            await asyncio.wait_for(notification_queue.get(), timeout=30.0)
+            task = await self.task_repo.get_next_pending()
+            if task:
+                return await self._mark_and_return(task)
+                
+        except asyncio.TimeoutError:
             return None
+        except Exception as e:
+            print(f"Ошибка в Long Polling: {e}")
+            return None
+        finally:
+            if driver and not driver.is_closed():
+                try:
+                    await driver.remove_listener("new_task_channel", on_notification)
+                except:
+                    pass
+        
+        return None
+
+    async def _mark_and_return(self, task) -> STaskWorkerTake:
         await self.task_repo.update_status(task.id, "processing")
         return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
 

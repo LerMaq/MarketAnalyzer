@@ -3,22 +3,30 @@
     "configurations": [
         {
             "type": "debugpy",
-            "name": "backend",
+            "name": "🐍 Launch Backend",
             "request": "launch",
             "program": "${workspaceFolder}/backend/run.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/backend",
             "envFile": "${workspaceFolder}/backend/.env",
-            "purpose": [
-                "debug-test"
-            ]
+            "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe"
         },
         {
-            "name": "frontend",
+            "name": "🌐 Launch Frontend",
             "type": "node-terminal",
             "request": "launch",
             "command": "npm run dev",
             "cwd": "${workspaceFolder}/frontend"
+        },
+        {
+            "type": "debugpy",
+            "name": "🤖 Launch Scraper",
+            "request": "launch",
+            "program": "${workspaceFolder}/scraper/main.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/scraper",
+            "envFile": "${workspaceFolder}/scraper/.env",
+            "python": "${workspaceFolder}/scraper/.venv/Scripts/python.exe"
         }
     ]
 }
