@@ -68,3 +68,11 @@ class UserService:
         await self.repo.change_password(user.id, hashed)
 
         return SSimpleMessage.model_validate({"detail": "ok"})
+
+    async def delete_my_account(self, user: Optional[User]) -> SSimpleMessage:
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+        await self.repo.delete_user(user.id)
+
+        return SSimpleMessage.model_validate({"detail": "Account deleted"})

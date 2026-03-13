@@ -1,7 +1,11 @@
 <template>
   <div class="app-wrapper">
     <header class="header">
-      <div class="logo" @click="$router.push('/')">Ozon<span>AI</span></div>
+      <div class="logo" @click="$router.push('/')">
+        <div class="logo img">
+          <img src="\logo market_analyzer.png" alt="Ozon AI Logo">
+        </div>
+        Ozon<span>AI</span></div>
       <nav class="nav">
         <template v-if="isAuthenticated">
           <button class="link-btn" @click="$router.push('/profile')">Профиль</button>
@@ -63,14 +67,33 @@ const isAuthenticated = computed(() => !!auth.user.value)
   z-index: 1000;
 }
 .logo {
-  font-size: 1.5rem;
+  display: flex;
+  font-size: 2rem;
   font-weight: 800;
   color: #005bff;
   cursor: pointer;
 }
+
+.logo img { width: 50px; height: 50px; margin-right: 10px;}
 .logo span { color: #f91155; }
 .container { padding: 2rem 5%; max-width: 1200px; margin: 0 auto; }
 
 .nav { display: flex; gap: 10px; }
-.link-btn { background: transparent; border: none; color: #005bff; font-size: 1rem; cursor: pointer; padding: 0.25rem 0.5rem; }
-.link-btn:hover { text-decoration: underline; }</style>
+.link-btn {
+  background: #005bff;
+  border: none;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 91, 255, 0.2);
+  transition: all 0.2s ease;
+}
+.link-btn:hover {
+  background: #0047cc;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 91, 255, 0.3);
+}
+</style>

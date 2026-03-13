@@ -50,17 +50,41 @@
             <span class="ozon-id">Ozon ID: {{ task.ozon_id }}</span>
             <span class="status" :class="task.status">{{ getStatusText(task.status) }}</span>
           </div>
-          <div v-if="task.product_id" class="task-actions">
-            <button @click="viewReport(task.product_id)">Посмотреть отчет</button>
-          </div>
+            <div v-if="task.product_id" class="task-actions">
+              <button @click="viewReport(task.ozon_id, task.product_id)">Посмотреть отчет</button>
+            </div>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <button @click="logout" class="logout-btn">Выйти</button>
+      <div class="account-actions">
+        <button @click="logout" class="logout-btn">Выйти</button>
+        <button @click="showDeleteModal = true" class="delete-btn">Удалить аккаунт</button>
+      </div>
     </section>
   </div>
+
+  <!-- Модальное окно подтверждения удаления аккаунта -->
+  <Transition name="fade">
+    <div v-if="showDeleteModal" class="modal-overlay" @click.self="cancelDelete">
+      <div class="modal-content delete-confirm-modal">
+        <button @click="cancelDelete" class="close-modal modal-close-big">&times;</button>
+        <header class="modal-header">
+          <h3>Подтверждение удаления аккаунта</h3>
+        </header>
+
+        <div class="modal-body">
+          <p>Вы уверены, что хотите удалить свой аккаунт? Это действие необратимо — все ваши данные будут удалены без возможности восстановления.</p>
+
+          <div class="modal-actions">
+            <button type="button" @click="cancelDelete">Отмена</button>
+            <button type="button" @click="confirmDelete" class="delete-confirm-btn">Удалить аккаунт</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup>
@@ -77,6 +101,9 @@ const tasks = ref([])
 // visibility toggles for password fields
 const showOldPassword = ref(false)
 const showNewPassword = ref(false)
+
+// состояние модального окна
+const showDeleteModal = ref(false)
 
 const loadProfile = async () => {
   try {
@@ -129,8 +156,8 @@ const getStatusText = (status) => {
   return statuses[status] || status
 }
 
-const viewReport = (productId) => {
-  router.push(`/product/${productId}`)
+const viewReport = (ozonId, productId) => {
+  router.push(`/product/${ozonId}/${productId}`)
 }
 
 onMounted(() => {
@@ -144,6 +171,22 @@ const logout = async () => {
   await auth.logout()
   router.push('/')
 }
+
+const confirmDelete = async () => {
+  try {
+    await api.delete('/user/me')
+    await auth.logout()
+    router.push('/')
+  } catch (e) {
+    console.error('Ошибка удаления аккаунта', e)
+    alert(e.response?.data?.detail || 'Ошибка при удалении аккаунта')
+    showDeleteModal.value = false
+  }
+}
+
+const cancelDelete = () => {
+  showDeleteModal.value = false
+}
 </script>
 
 <style scoped>
@@ -151,6 +194,14 @@ const logout = async () => {
   max-width: 800px;
   margin: 20px auto;
   padding: 0 20px;
+}
+
+.profile-page h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 1.5em;
+  justify-self: center;
 }
 
 .card {
@@ -228,11 +279,27 @@ button:hover {
   background: #0056b3;
 }
 
+.account-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .logout-btn {
-  background: #dc3545;
+  background: white;
+  color: black;
+  border: 2px solid #dc3545;
 }
 
 .logout-btn:hover {
+  background: #f8f9fa;
+}
+
+.delete-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.delete-btn:hover {
   background: #c82333;
 }
 
@@ -309,5 +376,109 @@ button:hover {
 
 .task-actions button:hover {
   background: #218838;
+}
+
+/* Модальное окно */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 500px;
+  padding: 30px;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.modal-close-big {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #888;
+}
+
+.modal-body {
+  padding: 0;
+}
+
+.modal-body p {
+  line-height: 1.6;
+  color: #444;
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-actions button {
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 1em;
+  transition: all 0.2s;
+}
+
+.modal-actions button[type="button"] {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.modal-actions button[type="button"]:hover {
+  background: #e0e0e0;
+}
+
+.delete-confirm-btn {
+  background: #dc3545 !important;
+  color: white;
+}
+
+.delete-confirm-btn:hover {
+  background: #c82333 !important;
+}
+
+/* Анимация появления */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

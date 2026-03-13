@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import select, update
+from sqlalchemy import select, delete, update
 from sqlalchemy.orm import selectinload, joinedload
 from datetime import datetime, timezone
 
@@ -105,4 +105,17 @@ class UserRepository:
 
     async def change_password(self, user_id: int, new_hashed_password: str):
         await self.db.execute(update(User).where(User.id == user_id).values(password=new_hashed_password))
+        await self.db.commit()
+
+    async def delete_user(self, user_id: int):
+        # Удаляем все сессии пользователя
+        await self.db.execute(delete(Session).where(Session.user_id == user_id))
+        # Удаляем статистику использования
+        await self.db.execute(delete(UserUsage).where(UserUsage.user_id == user_id))
+        # Удаляем связи с ролями
+        await self.db.execute(delete(UserRank).where(UserRank.user_id == user_id))
+        # Удаляем пользователя
+        user = await self.db.get(User, user_id)
+        if user:
+            await self.db.delete(user)
         await self.db.commit()

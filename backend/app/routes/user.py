@@ -36,3 +36,12 @@ async def change_password(
 ):
         service = UserService(db)
         return await service.change_my_password(user, payload.model_dump())
+
+
+@router.delete("/me", response_model=SSimpleMessage)
+async def delete_my_account(
+        user: Optional[User] = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+        service = UserService(db)
+        return await service.delete_my_account(user)
