@@ -168,7 +168,7 @@ PERMISSIONS = [
 ]
 
 RANKS = [
-    {"name": "free", "level": 10, "analysis": 3, "chat": 10, "perms": ["task.analysis", "chat.ask", "ai_api_key.use"]},
+    {"name": "free", "level": 10, "analysis": 5, "chat": 15, "perms": ["task.analysis", "chat.ask", "ai_api_key.use"]},
     {"name": "premium", "level": 20, "analysis": 10, "chat": 100,
      "perms": ["task.analysis", "chat.ask", "ai_api_key.use"]},
     {"name": "worker", "level": 30, "analysis": None, "chat": 50, "perms": ["task.worker", "chat.ask"]},

@@ -21,7 +21,8 @@ class User(Base):
     def active_permissions(self) -> set[str]:
         """Возвращает набор активных прав пользователя."""
         active_perms = set()
-        now = datetime.now(timezone.utc)
+        # expires_at хранится как naive (TIMESTAMP WITHOUT TIME ZONE)
+        now = datetime.now()
 
         for ur in self.user_ranks:
             if ur.expires_at is None or ur.expires_at > now:
@@ -33,7 +34,8 @@ class User(Base):
     def daily_limits(self) -> dict:
         """Находит максимальные лимиты среди всех ролей пользователя."""
         limits = {"analysis": 0, "chat": 0}
-        now = datetime.now(timezone.utc)
+        # expires_at хранится как naive (TIMESTAMP WITHOUT TIME ZONE)
+        now = datetime.now()
 
         for ur in self.user_ranks:
             if ur.expires_at is None or ur.expires_at > now:

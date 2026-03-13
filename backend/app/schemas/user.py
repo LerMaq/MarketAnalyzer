@@ -1,6 +1,17 @@
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 
+
+class SUserLimits(BaseModel):
+    analysis: int
+    chat: int
+
+
+class SUserUsage(BaseModel):
+    analysis: int
+    chat: int
+
+
 class SUserRead(BaseModel):
     id: int
     email: EmailStr
@@ -9,11 +20,19 @@ class SUserRead(BaseModel):
     class Config:
         from_attributes = True
 
+
 class SUserFullProfile(SUserRead):
-    permissions: List[str] # Плоский список прав, собранный сервисом
+    permissions: List[str]
+    tariff: str = "free"  # "free" | "premium"
+    limits: SUserLimits
+    usage: SUserUsage
 
     class Config:
         from_attributes = True
+
+
+class SSubscribeRequest(BaseModel):
+    amount: int
 
 
 class SUserUpdate(BaseModel):

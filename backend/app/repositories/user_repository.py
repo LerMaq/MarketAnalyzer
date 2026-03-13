@@ -1,7 +1,7 @@
 from typing import Optional
 from sqlalchemy import select, delete, update
 from sqlalchemy.orm import selectinload, joinedload
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.models.user import User, Session, UserRank, Rank, RankPermission, Permission, UserUsage
 from app.auth.security import get_token_hash
@@ -105,6 +105,17 @@ class UserRepository:
 
     async def change_password(self, user_id: int, new_hashed_password: str):
         await self.db.execute(update(User).where(User.id == user_id).values(password=new_hashed_password))
+        await self.db.commit()
+
+    async def upgrade_to_premium(self, user_id: int, days: int = 30):
+        res = await self.db.execute(select(Rank).where(Rank.name == "premium"))
+        premium_rank = res.scalar_one_or_none()
+        if not premium_rank:
+            raise ValueError("Rank 'premium' not found in database")
+        # БД хранит TIMESTAMP WITHOUT TIME ZONE — нужен naive datetime
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).replace(tzinfo=None)
+        ur = UserRank(user_id=user_id, rank_id=premium_rank.id, expires_at=expires_at)
+        self.db.add(ur)
         await self.db.commit()
 
     async def delete_user(self, user_id: int):

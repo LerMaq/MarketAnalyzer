@@ -281,6 +281,36 @@ const newKeyData = ref({
 const showDeleteConfirm = ref(false)
 const deleteKeyId = ref(null)
 
+// Аккуратная синхронизация сообщений с БД после стрима/остановки
+const syncMessagesWithRetry = async (maxAttempts = 3, delay = 500) => {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      if (!chatId.value) break
+
+      const res = await api.get(`/chat/${chatId.value}/messages`)
+      if (res.data && res.data.length > 0) {
+        const lastMsg = res.data[res.data.length - 1]
+
+        // Если последнее сообщение в БД — это ответ ассистента,
+        // значит фоновая задача на бэке отработала успешно
+        if (lastMsg.role === 'assistant') {
+          messages.value = formatMessages(res.data)
+          streamingText.value = ''
+          return true
+        }
+      }
+    } catch (e) {
+      console.error('Попытка синхронизации не удалась:', e)
+    }
+
+    await new Promise(resolve => setTimeout(resolve, delay))
+  }
+
+  // Если все попытки провалены (редкий случай), просто гасим поток
+  streamingText.value = ''
+  return false
+}
+
 
 
 
@@ -511,7 +541,8 @@ const sendMessage = async () => {
       myChats.value.unshift(createRes.data)
     }
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/chat/stream`, {
+    const baseURL = import.meta.env.VITE_API_URL || window.location.origin || 'http://localhost:8000'
+    const response = await fetch(`${baseURL}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -521,6 +552,10 @@ const sendMessage = async () => {
         message_text: text
       })
     })
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Stream request failed with status ${response.status}`)
+    }
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()

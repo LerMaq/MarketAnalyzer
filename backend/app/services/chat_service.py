@@ -123,6 +123,8 @@ class ChatService:
                 yield "data: [DONE]\\n\\n"
                 return
 
+            await self.user_repo.increment_usage(user.id, chat=True)
+
         chat = await self.repo.get_chat_by_id(chat_id)
         if not chat:
             yield "data: Error: Chat not found\\n\\n"

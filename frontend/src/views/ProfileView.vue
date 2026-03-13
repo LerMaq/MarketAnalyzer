@@ -1,6 +1,29 @@
 <template>
   <div class="profile-page">
     <h2>Профиль</h2>
+    <section class="card subscription-block">
+      <h3>Подписка</h3>
+      <div class="tariff-badge" :class="profile?.tariff || 'free'">
+        {{ profile?.tariff === 'premium' ? 'Премиум' : 'Бесплатно' }}
+      </div>
+      <div class="limits-grid">
+        <div class="limit-item">
+          <div class="limit-label">Анализов осталось на сегодня</div>
+          <div class="limit-value">{{ analysisLeft }} из {{ profile?.limits?.analysis ?? 0 }}</div>
+          <div class="progress-bar">
+            <div class="progress-fill analysis" :style="{ width: analysisProgress + '%' }"></div>
+          </div>
+        </div>
+        <div class="limit-item">
+          <div class="limit-label">Сообщений в чате осталось на сегодня</div>
+          <div class="limit-value">{{ chatLeft }} из {{ profile?.limits?.chat ?? 0 }}</div>
+          <div class="progress-bar">
+            <div class="progress-fill chat" :style="{ width: chatProgress + '%' }"></div>
+          </div>
+        </div>
+      </div>
+      <router-link to="/tariffs" class="link-tariffs">Сменить тариф →</router-link>
+    </section>
 
     <section class="card">
       <h3>Основные данные</h3>
@@ -88,7 +111,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../api/client'
 import auth from '../auth'
 import { useRouter } from 'vue-router'
@@ -97,6 +120,7 @@ const name = ref('')
 const oldPassword = ref('')
 const newPassword = ref('')
 const tasks = ref([])
+const profile = ref(null)
 
 // visibility toggles for password fields
 const showOldPassword = ref(false)
@@ -108,11 +132,38 @@ const showDeleteModal = ref(false)
 const loadProfile = async () => {
   try {
     const res = await api.get('/user/me')
+    profile.value = res.data
     name.value = res.data.name || ''
   } catch (e) {
     console.error('Ошибка загрузки профиля', e)
   }
 }
+
+const analysisLeft = computed(() => {
+  const lim = profile.value?.limits?.analysis ?? 0
+  const used = profile.value?.usage?.analysis ?? 0
+  return Math.max(0, lim - used)
+})
+
+const chatLeft = computed(() => {
+  const lim = profile.value?.limits?.chat ?? 0
+  const used = profile.value?.usage?.chat ?? 0
+  return Math.max(0, lim - used)
+})
+
+const analysisProgress = computed(() => {
+  const lim = profile.value?.limits?.analysis ?? 0
+  if (lim === 0) return 0
+  const used = profile.value?.usage?.analysis ?? 0
+  return Math.min(100, (used / lim) * 100)
+})
+
+const chatProgress = computed(() => {
+  const lim = profile.value?.limits?.chat ?? 0
+  if (lim === 0) return 0
+  const used = profile.value?.usage?.chat ?? 0
+  return Math.min(100, (used / lim) * 100)
+})
 
 const loadTasks = async () => {
   try {
@@ -209,6 +260,7 @@ const cancelDelete = () => {
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 20px;
+  margin-top: 20px;
   border: 1px solid #e0e0e0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -480,5 +532,75 @@ button:hover {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.subscription-block .tariff-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.subscription-block .tariff-badge.free {
+  background: #e8e8e8;
+  color: #555;
+}
+
+.subscription-block .tariff-badge.premium {
+  background: #005bff;
+  color: white;
+}
+
+.limits-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.limit-item .limit-label {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.limit-item .limit-value {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e8e8e8;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.progress-fill.analysis {
+  background: #28a745;
+}
+
+.progress-fill.chat {
+  background: #007bff;
+}
+
+.link-tariffs {
+  display: inline-block;
+  margin-top: 16px;
+  color: #005bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.link-tariffs:hover {
+  text-decoration: underline;
 }
 </style>
