@@ -61,3 +61,6 @@ class SProductTopItem(BaseModel):
     date_added: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class SCheckProductRequest(BaseModel):
+    url: str

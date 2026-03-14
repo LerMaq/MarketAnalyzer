@@ -8,6 +8,7 @@ class STask(BaseModel):
     status: str
     product_id: Optional[int] = None
     user_id: int
+    retry_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 

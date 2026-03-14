@@ -5,7 +5,7 @@ from typing import List
 from app.repositories import ProductRepository
 from app.schemas import SProductCheck, SProductFull, SProductVersionsList, SProductVersion, SAiAnalysisResponse, SProductTopItem
 from app.models import Product, AiSummary, ProductMetric
-
+from app.utils import extract_ozon_id
 
 
 class ProductService:
@@ -20,11 +20,12 @@ class ProductService:
         return SProductCheck(exists=True, ozon_id=ozon_id,
                              id=product.id, name=product.name, date_added=product.date_added)
 
-    async def get_versions_list(self, ozon_id: int) -> SProductVersionsList:
+    async def get_versions_list(self, url: str) -> SProductVersionsList:
         """
         Получает список всех версий товара.
         Если версий нет — возвращает пустой список.
         """
+        ozon_id = extract_ozon_id(url)
         products = await self.product_repo.get_all_versions(ozon_id)
 
         versions = [

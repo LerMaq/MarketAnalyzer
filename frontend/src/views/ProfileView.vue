@@ -203,6 +203,7 @@ const changePassword = async () => {
 const getStatusText = (status) => {
   const statuses = {
     pending: 'Ожидает',
+    fetching: 'Сбор данных',
     processing: 'В обработке',
     completed: 'Завершена',
     failed: 'Ошибка'
@@ -441,19 +442,24 @@ button:hover {
   color: #856404;
 }
 
-.status.processing {
+.status.fetching {
   background: #cce5ff;
   color: #004085;
 }
 
-.status.completed {
-  background: #d4edda;
-  color: #155724;
+.status.processing {
+  background: #e8f4e8;
+  color: #1e5f1e;
 }
 
 .status.failed {
   background: #f8d7da;
   color: #721c24;
+}
+
+.status.completed {
+  background: #d4edda;
+  color: #155724;
 }
 
 .task-actions button {

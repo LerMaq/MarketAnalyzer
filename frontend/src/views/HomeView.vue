@@ -8,7 +8,7 @@
     <div class="search-container">
       <div class="search-box">
         <input
-          v-model="urlOrId"
+          v-model="urlOrQuery"
           placeholder="Вставьте ссылку на Ozon или артикул"
           @keyup.enter="handleSearch"
           @focus="isFocused = true"
@@ -21,13 +21,17 @@
         </button>
       </div>
 
-      <ul v-if="isFocused && recentIds.length > 0" class="suggestions-list">
+      <ul v-if="isFocused && recentSearches.length > 0" class="suggestions-list">
         <li
-          v-for="id in recentIds"
-          :key="id"
-          @mousedown="selectFromHistory(id)"
+          v-for="query in recentSearches"
+          :key="query"
+          class="suggestion-item"
+          @mousedown.prevent="selectFromHistory(query)"
         >
-          {{ id }}
+          <span class="query-text">{{ query }}</span>
+          <button class="paste-btn" title="Вставить в поле" @mousedown.stop.prevent="pasteFromHistory(query)">
+            ⤴️
+          </button>
         </li>
         <li class="clear-history-item" @mousedown="clearHistory">
           Очистить историю
@@ -35,10 +39,23 @@
       </ul>
     </div>
 
-    <div v-if="taskStatus && taskStatus !== 'completed'" class="loading-status">
+    <div v-if="taskStatus && taskStatus !== 'completed' && taskStatus !== 'failed'" class="loading-status">
       <div class="spinner"></div>
+      <p v-if="taskStatus === 'checking'">Подождите...</p>
       <p v-if="taskStatus === 'pending'">Задача в очереди...</p>
+      <p v-if="taskStatus === 'fetching'">Собираем данные о товаре...</p>
       <p v-if="taskStatus === 'processing'">ИИ читает отзывы и формирует отчет...</p>
+      <p
+        v-if="taskRetryCount > 0 && (taskStatus === 'pending' || taskStatus === 'fetching')"
+        class="retry-hint"
+      >
+        Повторная попытка анализа... (Попытка {{ taskRetryCount }}/3)
+      </p>
+    </div>
+
+    <div v-if="taskStatus === 'failed'" class="error-status">
+      <p class="error-message">Не удалось провести анализ. Попытка возвращена на баланс</p>
+      <button @click="retryAfterFail" class="retry-btn">Попробовать снова</button>
     </div>
 
     <div v-if="versions.length > 0" class="versions-section">
@@ -49,7 +66,7 @@
             <span class="date">{{ new Date(v.date_added).toLocaleDateString() }}</span>
             <span class="time">{{ new Date(v.date_added).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
           </div>
-          <button @click="$router.push(`/product/${getOzonId(urlOrId)}/${v.id}`)" class="open-btn">
+          <button @click="$router.push(`/product/${v.ozon_id}/${v.id}`)" class="open-btn">
             Открыть отчет
           </button>
         </div>
@@ -108,20 +125,15 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-const urlOrId = ref('')
+const urlOrQuery = ref('')
 const versions = ref([])
 const isLoading = ref(false)
 const taskStatus = ref(null)
-const recentIds = ref([])
+const taskRetryCount = ref(0)
+const recentSearches = ref([])
 const isFocused = ref(false)
 const topProducts = ref([])
 const isTopProductsLoading = ref(true)
-
-const getOzonId = (input) => {
-  if (!input) return null;
-  const match = input.match(/(\d{9,})/);
-  return match ? match[0] : input;
-};
 
 const scoreClass = (score) => {
   if (score >= 7) return 'score-good'
@@ -137,9 +149,9 @@ const rankClass = (index) => {
 }
 
 onMounted(async () => {
-  const saved = localStorage.getItem('recent_ozon_ids')
+  const saved = localStorage.getItem('recent_searches')
   if (saved) {
-    recentIds.value = JSON.parse(saved)
+    recentSearches.value = JSON.parse(saved)
   }
 
   try {
@@ -152,68 +164,82 @@ onMounted(async () => {
   }
 })
 
-const addToHistory = (id) => {
-  if (!id) return
-  const ozonId = getOzonId(id);
-  if (!ozonId) return;
+const addToHistory = (query) => {
+  if (!query) return
 
-  const filtered = recentIds.value.filter(item => item !== ozonId)
-  recentIds.value = [ozonId, ...filtered].slice(0, 5)
-  localStorage.setItem('recent_ozon_ids', JSON.stringify(recentIds.value))
+  const filtered = recentSearches.value.filter(item => item !== query)
+  recentSearches.value = [query, ...filtered].slice(0, 5)
+  localStorage.setItem('recent_searches', JSON.stringify(recentSearches.value))
 }
 
-const selectFromHistory = (id) => {
-  urlOrId.value = id
+const selectFromHistory = (query) => {
+  urlOrQuery.value = query
   isFocused.value = false
   handleSearch()
 }
 
+const pasteFromHistory = (query) => {
+  urlOrQuery.value = query
+  isFocused.value = false
+}
+
 const clearHistory = () => {
-  recentIds.value = []
-  localStorage.removeItem('recent_ozon_ids')
+  recentSearches.value = []
+  localStorage.removeItem('recent_searches')
   isFocused.value = false
 }
 
 const handleSearch = async () => {
-  const ozonId = getOzonId(urlOrId.value);
-  if (!ozonId) return;
+  const query = urlOrQuery.value.trim();
+  if (!query) return;
 
-  isFocused.value = false
-  addToHistory(urlOrId.value)
-  isLoading.value = true
-  versions.value = []
+  isFocused.value = false;
+  addToHistory(query);
+  isLoading.value = true;
+  versions.value = [];
+  taskStatus.value = 'checking';
+  taskRetryCount.value = 0;
 
   try {
-    const res = await api.get(`/products/check/${ozonId}`)
-    const foundVersions = res.data.versions || []
+    const res = await api.post('/products/check', { url: query });
+    const foundVersions = res.data.versions || [];
 
     if (foundVersions.length > 0) {
-      versions.value = foundVersions
-      isLoading.value = false
+      versions.value = foundVersions;
+      isLoading.value = false;
+      taskStatus.value = null; // Сбрасываем статус, так как версии найдены
     } else {
-      await startNewTask()
+      await startNewTask(); // Переходим к созданию задачи
     }
   } catch (e) {
-    console.error("Детали ошибки:", e)
-    alert('Ошибка при связи с сервером')
-    isLoading.value = false
+    console.error("Детали ошибки:", e);
+    alert('Ошибка при связи с сервером');
+    isLoading.value = false;
+    taskStatus.value = null; // Сбрасываем статус при ошибке
   }
 }
 
 const startNewTask = async () => {
   try {
     const res = await api.post('/tasks/add', {
-      url_or_id: urlOrId.value
+      url_or_id: urlOrQuery.value
     });
     const newTaskId = res.data.task_id;
+    const status = res.data.status;
 
     if (newTaskId) {
+      taskStatus.value = status;
+      taskRetryCount.value = 0;
       pollTaskStatus(newTaskId);
     } else {
       console.error("Сервер не вернул ID задачи:", res.data);
+      isLoading.value = false;
+      taskStatus.value = null;
     }
   } catch (e) {
     console.error("Ошибка при создании задачи:", e);
+    isLoading.value = false;
+    taskStatus.value = null;
   }
 }
 
@@ -223,6 +249,7 @@ const pollTaskStatus = (taskId) => {
       const res = await api.get(`/tasks/status/${taskId}`);
       const taskData = res.data;
       taskStatus.value = taskData.status;
+      taskRetryCount.value = taskData.retry_count ?? 0;
 
       if (taskData.status === 'completed') {
         clearInterval(interval);
@@ -235,12 +262,20 @@ const pollTaskStatus = (taskId) => {
       } else if (taskData.status === 'failed') {
         clearInterval(interval);
         isLoading.value = false;
-        alert("Анализ завершился ошибкой");
       }
     } catch (e) {
       console.error("Ошибка опроса статуса:", e);
+      clearInterval(interval);
+      isLoading.value = false;
+      taskStatus.value = null;
     }
   }, 2000);
+};
+
+const retryAfterFail = () => {
+  taskStatus.value = null;
+  taskRetryCount.value = 0;
+  isLoading.value = false;
 };
 </script>
 
@@ -331,7 +366,10 @@ button:disabled { background: #ccc; }
   border-top: 1px solid #eee;
 }
 
-.suggestions-list li {
+.suggestion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 12px 16px;
   border-radius: 8px;
   cursor: pointer;
@@ -339,16 +377,36 @@ button:disabled { background: #ccc; }
   font-size: 0.95rem;
 }
 
-.suggestions-list li:hover {
+.suggestion-item:hover {
   background-color: #f0f6ff;
+}
+
+.query-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.paste-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  color: #999;
+  padding: 0 5px;
+}
+
+.paste-btn:hover {
+  color: #005bff;
 }
 
 .clear-history-item {
   margin-top: 8px;
-  padding-top: 8px;
+  padding: 12px 16px;
   border-top: 1px solid #eee;
   color: #999 !important;
   font-size: 0.85rem !important;
+  cursor: pointer;
 }
 
 .clear-history-item:hover {
@@ -419,6 +477,44 @@ button:disabled { background: #ccc; }
 .loading-status {
   text-align: center;
   padding: 20px;
+}
+
+.error-status {
+  text-align: center;
+  padding: 24px;
+  background: #fdeaea;
+  border: 1px solid #f8d7da;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.error-message {
+  color: #721c24;
+  margin: 0 0 16px 0;
+  font-weight: 500;
+}
+
+.retry-btn {
+  display: block;
+  margin: 0 auto;
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: #c82333;
+}
+
+.retry-hint {
+  font-size: 0.85rem;
+  color: #999;
+  margin-top: 8px;
 }
 
 .spinner {

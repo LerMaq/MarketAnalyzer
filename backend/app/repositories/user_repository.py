@@ -96,6 +96,20 @@ class UserRepository:
         await self.db.execute(query)
         await self.db.commit()
 
+    async def refund_analysis(self, user_id: int) -> None:
+        """Уменьшить значение analysis_count на 1 за сегодня (минимум 0)"""
+        today = datetime.now(timezone.utc).date()
+        await self.db.execute(
+            update(UserUsage)
+            .where(
+                UserUsage.user_id == user_id,
+                UserUsage.usage_date == today,
+                UserUsage.analysis_count > 0,
+            )
+            .values(analysis_count=UserUsage.analysis_count - 1)
+        )
+        await self.db.commit()
+
     async def update_user(self, user_id: int, update_data: dict) -> User:
         await self.db.execute(update(User).where(User.id == user_id).values(**update_data))
         await self.db.commit()

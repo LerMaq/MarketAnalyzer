@@ -158,6 +158,7 @@ AI_CONFIGS = [
 
 PERMISSIONS = [
     ("task.analysis", "Анализ товара"),
+    ("task.priority_queue", "Приоритетная очередь задач"),
     ("chat.ask", "Уточняющие вопросы в чате"),
     ("ai_api_key.use", "Использование собственных API ключей для нейросетей"),
     ("ai.manage_keys", "Управление системными API ключами ИИ"),
@@ -170,7 +171,7 @@ PERMISSIONS = [
 RANKS = [
     {"name": "free", "level": 10, "analysis": 5, "chat": 15, "perms": ["task.analysis", "chat.ask", "ai_api_key.use"]},
     {"name": "premium", "level": 20, "analysis": 10, "chat": 100,
-     "perms": ["task.analysis", "chat.ask", "ai_api_key.use"]},
+     "perms": ["task.analysis", "task.priority_queue", "chat.ask", "ai_api_key.use"]},
     {"name": "worker", "level": 30, "analysis": None, "chat": 50, "perms": ["task.worker", "chat.ask"]},
     {"name": "moderator", "level": 40, "analysis": None, "chat": None,
      "perms": ["top.moderate", "user.manage", "chat.ask"]},

@@ -18,7 +18,7 @@ import app.models
 config = context.config
 
 load_dotenv()
-database_url = os.getenv("database_url")
+database_url = os.getenv("DATABASE_URL")
 config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:

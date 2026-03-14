@@ -99,6 +99,11 @@ class UserService:
         await self.repo.upgrade_to_premium(user.id, days=30)
         return SSimpleMessage.model_validate({"detail": "Подписка оформлена"})
 
+    async def refund_balance(self, user_id: int, analyses: int = 1) -> None:
+        """Вернуть пользователю списанные анализы (1 по умолчанию)."""
+        for _ in range(analyses):
+            await self.repo.refund_analysis(user_id)
+
     async def delete_my_account(self, user: Optional[User]) -> SSimpleMessage:
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")

@@ -95,9 +95,6 @@ def run_ozon_scraping(ozon_id):
     if not force_activate_chrome():
         return None
 
-    for key in ['ctrl', 'alt', 'shift', 'win']:
-        pyautogui.keyUp(key)
-
     pyautogui.press('alt')
     time.sleep(0.1)
     pyautogui.press('esc')
@@ -289,6 +286,18 @@ async def main():
                 print(f"\n📡 [{time.strftime('%H:%M:%S')}] Ожидание задачи...")
                 response = await client.get(f"{BASE_URL}/tasks/take")
                 
+                if response.status_code == 401:
+                    print("Получен 401 Unauthorized. Требуется повторная авторизация.")
+                    new_token = await login()
+                    if new_token:
+                        token = new_token
+                        client.headers["Authorization"] = f"Bearer {new_token}"
+                        print("Токен обновлен. Продолжаем работу.")
+                    else:
+                        print("Авторизация не удалась. Повтор через 5 секунд.")
+                    await asyncio.sleep(5)
+                    continue
+
                 if response.status_code == 200:
                     task = response.json()
                     if task:

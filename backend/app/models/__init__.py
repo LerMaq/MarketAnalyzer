@@ -1,5 +1,5 @@
 from .product import Product, Review, AiSummary, Metric, ProductMetric
-from .task import Task
+from .task import Task, TaskStatus
 from .user import User, Rank, UserRank, Permission, RankPermission, AiApiKey, Session, UserUsage
 from .ai import AiConfig, SystemAiApiKey, SystemAiModel
 from .chat import ChatMessage, Chat
@@ -11,6 +11,7 @@ __all__ = [
     "Metric",
     "ProductMetric",
     "Task",
+    "TaskStatus",
     "User",
     "Rank",
     "UserRank",

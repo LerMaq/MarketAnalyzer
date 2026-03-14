@@ -43,11 +43,8 @@ async def worker_complete(
     user: Optional[User] = Depends(get_current_user)
 ):
     service = TaskService(db)
-    # Проверяем права воркера перед запуском анализа
     await service.verify_worker_access(user)
-    
-    await service.task_repo.update_status(task_id, status="processing")
-    background_tasks.add_task(service.run_ai_analysis_and_finalize, task_id, data)
+    return await service.process_worker_complete(task_id, data, background_tasks, user)
 
 @router.get("/my", response_model=List[STask])
 async def get_my_tasks(
@@ -56,4 +53,3 @@ async def get_my_tasks(
 ):
     service = TaskService(db)
     return await service.get_user_tasks(user.id)
-    return {"status": "processing", "message": "Данные приняты, анализ запущен в фоне"}

@@ -53,6 +53,6 @@ SQL_DROP_TRIGGER = "DROP TRIGGER IF EXISTS trigger_new_task ON tasks;"
 
 SQL_CREATE_TRIGGER = """
 CREATE TRIGGER trigger_new_task
-AFTER INSERT ON tasks
+AFTER INSERT OR UPDATE ON tasks
 FOR EACH ROW EXECUTE FUNCTION notify_new_task();
 """
