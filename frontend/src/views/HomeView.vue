@@ -62,10 +62,16 @@
     </div>
 
     <!-- Топ товаров -->
-    <div v-if="topProducts.length > 0" class="top-section">
-      <h2 class="top-title">🏆 Топ товаров</h2>
+    <section class="top-section">
+      <h2 class="top-title">🏆 Топ товаров 🏆</h2>
       <p class="top-subtitle">Рейтинг по средневзвешенной оценке ИИ</p>
-      <div class="top-grid">
+      
+      <div v-if="isTopProductsLoading" class="top-loading">
+        <div class="spinner"></div>
+        <p>Загрузка топ товаров...</p>
+      </div>
+
+      <div v-else-if="topProducts.length > 0" class="top-grid">
         <div
           v-for="(product, index) in topProducts"
           :key="product.id"
@@ -87,7 +93,11 @@
           <div class="top-card-arrow">→</div>
         </div>
       </div>
-    </div>
+
+      <div v-else class="top-empty">
+        <p>Топ товаров пока нет</p>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -105,6 +115,7 @@ const taskStatus = ref(null)
 const recentIds = ref([])
 const isFocused = ref(false)
 const topProducts = ref([])
+const isTopProductsLoading = ref(true)
 
 const getOzonId = (input) => {
   if (!input) return null;
@@ -136,6 +147,8 @@ onMounted(async () => {
     topProducts.value = res.data
   } catch (e) {
     console.error('Ошибка загрузки топа товаров:', e)
+  } finally {
+    isTopProductsLoading.value = false
   }
 })
 
@@ -164,7 +177,6 @@ const clearHistory = () => {
 const handleSearch = async () => {
   const ozonId = getOzonId(urlOrId.value);
   if (!ozonId) return;
-
 
   isFocused.value = false
   addToHistory(urlOrId.value)
@@ -306,7 +318,7 @@ button:disabled { background: #ccc; }
 /* Suggestions List */
 .suggestions-list {
   position: absolute;
-  top: calc(100% - 16px); /* Overlap with the input box */
+  top: calc(100% - 16px);
   left: 0;
   right: 0;
   background: white;
@@ -343,7 +355,6 @@ button:disabled { background: #ccc; }
   color: #f56c6c !important;
   background: none !important;
 }
-
 
 /* Версии */
 .versions-section {
@@ -411,7 +422,8 @@ button:disabled { background: #ccc; }
 }
 
 .spinner {
-  width: 40px; height: 40px;
+  width: 40px;
+  height: 40px;
   border: 4px solid #f3f3f3;
   border-top: 4px solid #005bff;
   border-radius: 50%;
@@ -433,12 +445,14 @@ button:disabled { background: #ccc; }
   font-weight: 800;
   color: #1a1a1a;
   margin-bottom: 0.3rem;
+  justify-self: center;
 }
 
 .top-subtitle {
   color: #888;
   font-size: 0.95rem;
   margin-bottom: 1.5rem;
+  justify-self: center;
 }
 
 .top-grid {
@@ -554,5 +568,29 @@ button:disabled { background: #ccc; }
 
 .top-card:hover .top-card-arrow {
   color: #005bff;
+}
+
+/* Стили для лоадера топ товаров */
+.top-loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.top-loading .spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #005bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 15px;
+}
+
+.top-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+  font-style: italic;
 }
 </style>

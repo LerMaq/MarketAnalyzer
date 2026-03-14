@@ -1,5 +1,10 @@
 <template>
   <div class="profile-page fade-in">
+    <div v-if="isLoading" class="profile-loading-overlay">
+      <div class="spinner"></div>
+      <p>Загрузка профиля...</p>
+    </div>
+
     <h2>Профиль</h2>
     <section class="card subscription-block">
       <h3>Подписка</h3>
@@ -121,12 +126,10 @@ const oldPassword = ref('')
 const newPassword = ref('')
 const tasks = ref([])
 const profile = ref(null)
+const isLoading = ref(true)
 
-// visibility toggles for password fields
 const showOldPassword = ref(false)
 const showNewPassword = ref(false)
-
-// состояние модального окна
 const showDeleteModal = ref(false)
 
 const loadProfile = async () => {
@@ -211,9 +214,14 @@ const viewReport = (ozonId, productId) => {
   router.push(`/product/${ozonId}/${productId}`)
 }
 
-onMounted(() => {
-  loadProfile()
-  loadTasks()
+onMounted(async () => {
+  try {
+    await Promise.all([loadProfile(), loadTasks()])
+  } catch (e) {
+    console.error('Ошибка загрузки данных профиля:', e)
+  } finally {
+    isLoading.value = false
+  }
 })
 
 const router = useRouter()
@@ -245,6 +253,32 @@ const cancelDelete = () => {
   max-width: 800px;
   margin: 20px auto;
   padding: 0 20px;
+  position: relative;
+}
+
+.profile-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  color: #666;
+}
+
+.profile-loading-overlay .spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #005bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
 }
 
 .profile-page h2 {
@@ -430,7 +464,6 @@ button:hover {
   background: #218838;
 }
 
-/* Модальное окно */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -523,7 +556,6 @@ button:hover {
   background: #c82333 !important;
 }
 
-/* Анимация появления */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -602,5 +634,9 @@ button:hover {
 
 .link-tariffs:hover {
   text-decoration: underline;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
 }
 </style>
