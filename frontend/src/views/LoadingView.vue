@@ -28,7 +28,7 @@ onUnmounted(() => clearInterval(timer));
 </script>
 
 <template>
-  <div class="loading-screen">
+  <div class="loading-screen fade-in">
     <div class="spinner"></div>
     <p>ИИ анализирует отзывы и характеристики товара {{ id }}...</p>
     <p>Это может занять до 1 минуты.</p>

@@ -1,5 +1,5 @@
 <template>
-  <div class="tariffs-page">
+  <div class="tariffs-page fade-in">
     <h2 class="page-title">Тарифы</h2>
     <p class="page-desc">Выберите подходящий план для работы с OzonAI</p>
 

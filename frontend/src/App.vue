@@ -5,7 +5,8 @@
         <div class="logo img">
           <img src="\logo market_analyzer.png" alt="Ozon AI Logo">
         </div>
-        Ozon<span>AI</span></div>
+        Ozon<span>AI</span>
+      </div>
       <nav class="nav">
         <template v-if="isAuthenticated">
           <button class="link-btn" @click="$router.push('/tariffs')">Тарифы</button>
@@ -35,7 +36,6 @@ onMounted(() => {
 
 const logout = async () => {
   await auth.logout()
-  // after logout, send user to home or login
   window.location.href = '/'
 }
 
@@ -56,6 +56,7 @@ const isAuthenticated = computed(() => !!auth.user.value)
   background-color: #f8f9fa;
   min-height: 100vh;
 }
+
 .header {
   background: white;
   padding: 1rem 5%;
@@ -67,6 +68,7 @@ const isAuthenticated = computed(() => !!auth.user.value)
   top: 0;
   z-index: 1000;
 }
+
 .logo {
   display: flex;
   font-size: 2rem;
@@ -75,11 +77,27 @@ const isAuthenticated = computed(() => !!auth.user.value)
   cursor: pointer;
 }
 
-.logo img { width: 50px; height: 50px; margin-right: 10px;}
-.logo span { color: #f91155; }
-.container { padding: 2rem 5%; max-width: 1200px; margin: 0 auto; }
+.logo img {
+  width: 50px;
+  height: 50px;
+  margin-right: 10px;
+}
 
-.nav { display: flex; gap: 10px; }
+.logo span {
+  color: #f91155;
+}
+
+.container {
+  padding: 2rem 5%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.nav {
+  display: flex;
+  gap: 10px;
+}
+
 .link-btn {
   background: #005bff;
   border: none;
@@ -92,9 +110,26 @@ const isAuthenticated = computed(() => !!auth.user.value)
   box-shadow: 0 2px 4px rgba(0, 91, 255, 0.2);
   transition: all 0.2s ease;
 }
+
 .link-btn:hover {
   background: #0047cc;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 91, 255, 0.3);
+}
+
+/* Глобальная анимация fade-in для всех страниц */
+.fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

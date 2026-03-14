@@ -1,5 +1,5 @@
 <template>
-  <div class="auth-page">
+  <div class="auth-page fade-in">
     <h1>Вход в систему</h1>
     <div class="field">
       <label>Email</label>

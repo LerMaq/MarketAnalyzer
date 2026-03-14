@@ -1,5 +1,5 @@
 <template>
-  <div class="profile-page">
+  <div class="profile-page fade-in">
     <h2>Профиль</h2>
     <section class="card subscription-block">
       <h3>Подписка</h3>
