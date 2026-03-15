@@ -7,6 +7,8 @@
         </div>
         Ozon<span>AI</span>
       </div>
+      
+      <!-- Десктопная навигация -->
       <nav class="nav">
         <template v-if="isAuthenticated">
           <button class="link-btn" @click="$router.push('/tariffs')">Тарифы</button>
@@ -18,7 +20,35 @@
           <button class="link-btn" @click="$router.push('/register')">Регистрация</button>
         </template>
       </nav>
+      
+      <!-- Бургер-меню для мобильных -->
+      <button 
+        class="burger-menu" 
+        :class="{ active: isMobileMenuOpen }" 
+        @click="toggleMobileMenu"
+        aria-label="Меню"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
     </header>
+
+    <!-- Мобильная навигация -->
+    <nav class="mobile-nav" :class="{ active: isMobileMenuOpen }">
+      <template v-if="isAuthenticated">
+        <button class="link-btn" @click="navigateTo('/tariffs'); toggleMobileMenu()">Тарифы</button>
+        <button class="link-btn" @click="navigateTo('/profile'); toggleMobileMenu()">Профиль</button>
+        <button class="link-btn" @click="logoutAndCloseMenu">Выйти</button>
+      </template>
+      <template v-else>
+        <button class="link-btn" @click="navigateTo('/login'); toggleMobileMenu()">Вход</button>
+        <button class="link-btn" @click="navigateTo('/register'); toggleMobileMenu()">Регистрация</button>
+      </template>
+    </nav>
+    
+    <!-- Overlay для закрытия меню -->
+    <div class="overlay" :class="{ active: isMobileMenuOpen }" @click="toggleMobileMenu"></div>
 
     <main class="container">
       <router-view />
@@ -27,27 +57,61 @@
 </template>
 
 <script setup>
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import auth from './auth'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+const isMobileMenuOpen = ref(false)
 
 onMounted(() => {
   auth.loadUser()
 })
+
+const toggleMobileMenu = () => {
+  isMobileMenuOpen.value = !isMobileMenuOpen.value
+}
+
+const navigateTo = (path) => {
+  router.push(path)
+}
 
 const logout = async () => {
   await auth.logout()
   window.location.href = '/'
 }
 
+const logoutAndCloseMenu = async () => {
+  await logout()
+  isMobileMenuOpen.value = false
+}
+
 const isAuthenticated = computed(() => !!auth.user.value)
 </script>
 
 <style>
+/* CSS-переменные для адаптивности */
+:root {
+  --container-padding: 5%;
+  --container-max-width: 1200px;
+  --header-padding: 1rem;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --border-radius: 8px;
+  --transition: all 0.2s ease;
+}
+
 /* Глобальные стили, которые нужны везде */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .app-wrapper {
@@ -59,7 +123,7 @@ const isAuthenticated = computed(() => !!auth.user.value)
 
 .header {
   background: white;
-  padding: 1rem 5%;
+  padding: var(--header-padding) var(--container-padding);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -75,6 +139,7 @@ const isAuthenticated = computed(() => !!auth.user.value)
   font-weight: 800;
   color: #005bff;
   cursor: pointer;
+  align-items: center;
 }
 
 .logo img {
@@ -88,14 +153,93 @@ const isAuthenticated = computed(() => !!auth.user.value)
 }
 
 .container {
-  padding: 2rem 5%;
-  max-width: 1200px;
+  padding: var(--spacing-lg) var(--container-padding);
+  max-width: var(--container-max-width);
   margin: 0 auto;
 }
 
+/* Адаптивная навигация */
 .nav {
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-sm);
+}
+
+/* Бургер-меню для мобильных */
+.burger-menu {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  z-index: 1001;
+}
+
+.burger-menu span {
+  display: block;
+  width: 24px;
+  height: 3px;
+  background: #333;
+  border-radius: 2px;
+  transition: var(--transition);
+}
+
+.burger-menu.active span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.burger-menu.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.burger-menu.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(7px, -6px);
+}
+
+/* Мобильная навигация */
+.mobile-nav {
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 70%;
+  max-width: 300px;
+  height: 100vh;
+  background: white;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  padding: 80px var(--spacing-md) var(--spacing-md);
+  gap: var(--spacing-sm);
+  transition: right 0.3s ease;
+  z-index: 999;
+}
+
+.mobile-nav.active {
+  right: 0;
+}
+
+.mobile-nav .link-btn {
+  width: 100%;
+  text-align: left;
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 998;
+  opacity: 0;
+  visibility: hidden;
+  transition: var(--transition);
+}
+
+.overlay.active {
+  opacity: 1;
+  visibility: visible;
 }
 
 .link-btn {
@@ -106,15 +250,71 @@ const isAuthenticated = computed(() => !!auth.user.value)
   font-weight: 600;
   cursor: pointer;
   padding: 0.75rem 1.25rem;
-  border-radius: 8px;
+  border-radius: var(--border-radius);
   box-shadow: 0 2px 4px rgba(0, 91, 255, 0.2);
-  transition: all 0.2s ease;
+  transition: var(--transition);
+  white-space: nowrap;
 }
 
 .link-btn:hover {
   background: #0047cc;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 91, 255, 0.3);
+}
+
+/* Адаптивные медиа-запросы */
+@media (max-width: 768px) {
+  :root {
+    --header-padding: 0.75rem;
+    --container-padding: 4%;
+  }
+  
+  .header {
+    padding: var(--header-padding) var(--container-padding);
+  }
+  
+  .logo {
+    font-size: 1.5rem;
+  }
+  
+  .logo img {
+    width: 40px;
+    height: 40px;
+    margin-right: 8px;
+  }
+  
+  .nav {
+    display: none;
+  }
+  
+  .burger-menu {
+    display: flex;
+  }
+  
+  .container {
+    padding: var(--spacing-md) var(--container-padding);
+  }
+  
+  .link-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 360px) {
+  :root {
+    --container-padding: 3%;
+  }
+  
+  .logo {
+    font-size: 1.3rem;
+  }
+  
+  .logo img {
+    width: 36px;
+    height: 36px;
+    margin-right: 6px;
+  }
 }
 
 /* Глобальная анимация fade-in для всех страниц */

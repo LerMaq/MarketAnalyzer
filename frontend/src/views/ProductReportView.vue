@@ -645,8 +645,14 @@ const sendMessage = async () => {
 
 .report-grid {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: 1fr;
   gap: 30px;
+}
+
+@media (min-width: 1024px) {
+  .report-grid {
+    grid-template-columns: 1fr 380px;
+  }
 }
 
 .card {
@@ -701,8 +707,14 @@ const sendMessage = async () => {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 20px;
+}
+
+@media (min-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .metric-item {
@@ -767,6 +779,14 @@ const sendMessage = async () => {
   position: sticky;
   top: 20px;
   overflow: hidden;
+}
+
+@media (max-width: 1023px) {
+  .chat-container {
+    position: relative;
+    top: 0;
+    height: 450px;
+  }
 }
 
 .chat-container.is-blurred > *:not(.chat-overlay) {

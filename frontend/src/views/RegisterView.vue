@@ -47,12 +47,75 @@ const doRegister = async () => {
 </script>
 
 <style scoped>
-.auth-page { max-width: 400px; margin: 40px auto; }
-.field { display:flex; flex-direction:column; gap:6px; margin-bottom:12px }
-.actions { margin:16px 0 }
-input { padding:8px; border-radius:6px; border:1px solid #ddd }
-button { padding:8px 12px; border-radius:6px; background:#005bff; color:white; border:none; cursor:pointer }
+.auth-page { 
+  max-width: 400px; 
+  margin: 40px auto; 
+  padding: 0 20px;
+}
 
-.input-with-icon { position: relative; }
-.input-with-icon .eye-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2em; }
+.field { 
+  display:flex; 
+  flex-direction:column; 
+  gap:6px; 
+  margin-bottom:12px 
+}
+
+.actions { 
+  margin:16px 0 
+}
+
+input { 
+  padding:8px; 
+  border-radius:6px; 
+  border:1px solid #ddd;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button { 
+  padding:8px 12px; 
+  border-radius:6px; 
+  background:#005bff; 
+  color:white; 
+  border:none; 
+  cursor:pointer;
+  width: 100%;
+}
+
+.input-with-icon { 
+  position: relative; 
+}
+
+.input-with-icon .eye-toggle { 
+  position: absolute; 
+  right: 10px; 
+  top: 50%; 
+  transform: translateY(-50%); 
+  background: none; 
+  border: none; 
+  cursor: pointer; 
+  font-size: 1.2em; 
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 480px) {
+  .auth-page {
+    margin: 20px auto;
+    padding: 0 4%;
+  }
+  
+  input {
+    padding: 12px;
+    font-size: 1.1em;
+  }
+  
+  button {
+    padding: 12px;
+    font-size: 1.1em;
+  }
+  
+  .input-with-icon .eye-toggle {
+    right: 12px;
+  }
+}
 </style>

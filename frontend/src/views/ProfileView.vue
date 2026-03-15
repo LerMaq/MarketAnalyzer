@@ -331,12 +331,26 @@ input {
   border-radius: 8px;
   border: 1px solid #ddd;
   font-size: 1em;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 input:focus {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Адаптивность форм на мобильных */
+@media (max-width: 480px) {
+  .field {
+    margin-bottom: 16px;
+  }
+  
+  input {
+    padding: 12px;
+    font-size: 1.1em;
+  }
 }
 
 .input-with-icon {
@@ -367,10 +381,28 @@ button {
   cursor: pointer;
   font-size: 1em;
   transition: background-color 0.2s;
+  min-width: 120px;
 }
 
 button:hover {
   background: #0056b3;
+}
+
+/* Адаптивность кнопок на мобильных */
+@media (max-width: 480px) {
+  .actions button {
+    width: 100%;
+    padding: 12px;
+    font-size: 1.1em;
+  }
+  
+  .account-actions {
+    flex-direction: column;
+  }
+  
+  .account-actions button {
+    width: 100%;
+  }
 }
 
 .account-actions {
@@ -602,6 +634,20 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+@media (max-width: 480px) {
+  .limits-grid {
+    gap: 12px;
+  }
+  
+  .limit-item .limit-label {
+    font-size: 0.85rem;
+  }
+  
+  .limit-item .limit-value {
+    font-size: 1rem;
+  }
 }
 
 .limit-item .limit-label {

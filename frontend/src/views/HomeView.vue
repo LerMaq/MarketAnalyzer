@@ -350,7 +350,7 @@ const retryAfterFail = () => {
   z-index: 10;
 }
 
-input {
+.search-box input {
   flex: 1;
   border: 1px solid #eee;
   padding: 16px;
@@ -358,13 +358,14 @@ input {
   font-size: 1rem;
   outline: none;
   transition: border 0.2s;
+  min-width: 0;
 }
 
-input:focus {
+.search-box input:focus {
   border-color: #005bff;
 }
 
-button {
+.search-box button {
   background: #005bff;
   color: white;
   border: none;
@@ -375,10 +376,24 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-button:hover { background: #0046d5; }
-button:disabled { background: #ccc; }
+.search-box button:hover { background: #0046d5; }
+.search-box button:disabled { background: #ccc; }
+
+/* Адаптивность для search-box */
+@media (max-width: 480px) {
+  .search-box {
+    flex-direction: column;
+  }
+  
+  .search-box button {
+    width: 100%;
+    padding: 12px;
+  }
+}
 
 /* Suggestions List */
 .suggestions-list {
@@ -456,8 +471,14 @@ button:disabled { background: #ccc; }
 
 .versions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
+}
+
+@media (min-width: 481px) {
+  .versions-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
 }
 
 .version-card {

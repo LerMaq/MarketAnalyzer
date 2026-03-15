@@ -250,6 +250,54 @@ onMounted(loadProfile)
   flex-shrink: 0;
 }
 
+/* Адаптивность для очень узких экранов */
+@media (max-width: 480px) {
+  .tariffs-page {
+    padding: 0 4%;
+    margin: 20px auto;
+  }
+  
+  .page-title {
+    font-size: 1.5rem;
+  }
+  
+  .page-desc {
+    font-size: 0.95rem;
+    margin-bottom: 30px;
+  }
+  
+  .tariff-card {
+    padding: 20px 16px;
+  }
+  
+  .card-title {
+    font-size: 1.2rem;
+  }
+  
+  .param-row {
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+  
+  .param-row dd {
+    text-align: left;
+  }
+  
+  .modal {
+    padding: 20px;
+    width: 95%;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .btn-cancel, .btn-pay {
+    width: 100%;
+  }
+}
+
 .price {
   font-size: 1.1rem;
   font-weight: 500;
