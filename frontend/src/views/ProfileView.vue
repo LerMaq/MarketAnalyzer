@@ -487,8 +487,8 @@ button:hover {
 }
 
 .status.processing {
-  background: #e8f4e8;
-  color: #1e5f1e;
+  background: #cce5ff;
+  color: #004085;
 }
 
 .status.failed {

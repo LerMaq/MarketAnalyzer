@@ -7,7 +7,7 @@
         </div>
         Ozon<span>AI</span>
       </div>
-      
+
       <!-- Десктопная навигация -->
       <nav class="nav">
         <template v-if="isAuthenticated">
@@ -20,11 +20,11 @@
           <button class="link-btn" @click="$router.push('/register')">Регистрация</button>
         </template>
       </nav>
-      
+
       <!-- Бургер-меню для мобильных -->
-      <button 
-        class="burger-menu" 
-        :class="{ active: isMobileMenuOpen }" 
+      <button
+        class="burger-menu"
+        :class="{ active: isMobileMenuOpen }"
         @click="toggleMobileMenu"
         aria-label="Меню"
       >
@@ -46,9 +46,28 @@
         <button class="link-btn" @click="navigateTo('/register'); toggleMobileMenu()">Регистрация</button>
       </template>
     </nav>
-    
+
     <!-- Overlay для закрытия меню -->
     <div class="overlay" :class="{ active: isMobileMenuOpen }" @click="toggleMobileMenu"></div>
+
+    <Transition name="slide-down">
+      <div v-if="activeNotification" class="notify-bar" :class="activeNotification.type">
+        <div class="notify-text">
+          <strong>{{ activeNotification.title }}</strong>
+          <span>{{ activeNotification.message }}</span>
+        </div>
+        <div class="notify-actions">
+          <button
+            v-if="activeNotification.actionPath"
+            class="notify-btn"
+            @click="handleNotificationAction(activeNotification)"
+          >
+            {{ activeNotification.actionLabel || 'Открыть' }}
+          </button>
+          <button class="notify-close" @click="dismissNotification(activeNotification.id)">Скрыть</button>
+        </div>
+      </div>
+    </Transition>
 
     <main class="container">
       <router-view />
@@ -60,12 +79,14 @@
 import { onMounted, computed, ref } from 'vue'
 import auth from './auth'
 import { useRouter } from 'vue-router'
+import { initTracker, notifications, dismissNotification } from './analysisTracker'
 
 const router = useRouter()
 const isMobileMenuOpen = ref(false)
 
 onMounted(() => {
   auth.loadUser()
+  initTracker()
 })
 
 const toggleMobileMenu = () => {
@@ -87,6 +108,14 @@ const logoutAndCloseMenu = async () => {
 }
 
 const isAuthenticated = computed(() => !!auth.user.value)
+const activeNotification = computed(() => notifications.value[0] || null)
+
+const handleNotificationAction = (notification) => {
+  if (notification?.actionPath) {
+    router.push(notification.actionPath)
+    dismissNotification(notification.id)
+  }
+}
 </script>
 
 <style>
@@ -268,33 +297,33 @@ html, body {
     --header-padding: 0.75rem;
     --container-padding: 4%;
   }
-  
+
   .header {
     padding: var(--header-padding) var(--container-padding);
   }
-  
+
   .logo {
     font-size: 1.5rem;
   }
-  
+
   .logo img {
     width: 40px;
     height: 40px;
     margin-right: 8px;
   }
-  
+
   .nav {
     display: none;
   }
-  
+
   .burger-menu {
     display: flex;
   }
-  
+
   .container {
     padding: var(--spacing-md) var(--container-padding);
   }
-  
+
   .link-btn {
     padding: 0.6rem 1rem;
     font-size: 0.85rem;
@@ -305,11 +334,11 @@ html, body {
   :root {
     --container-padding: 3%;
   }
-  
+
   .logo {
     font-size: 1.3rem;
   }
-  
+
   .logo img {
     width: 36px;
     height: 36px;
@@ -332,4 +361,93 @@ html, body {
     transform: translateY(0);
   }
 }
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.35s ease;
+}
+.slide-down-enter-from,
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+}
+
+.notify-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 32px));
+  background: white;
+  border: 1px solid #e6e6e6;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+  z-index: 1200;
+}
+
+.notify-bar.success {
+  border-color: #b7e4c7;
+  background: #f0fff4;
+}
+
+.notify-bar.error {
+  border-color: #f5c2c7;
+  background: #fff5f5;
+}
+
+.notify-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #222;
+}
+
+.notify-text strong {
+  font-size: 0.95rem;
+}
+
+.notify-text span {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.notify-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.notify-btn {
+  background: #005bff;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notify-btn:hover {
+  background: #0046d5;
+}
+
+.notify-close {
+  background: #f0f2f5;
+  color: #333;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.notify-close:hover {
+  background: #e4e6e9;
+}
 </style>
+
+

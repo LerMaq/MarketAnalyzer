@@ -21,6 +21,23 @@
         </button>
       </div>
 
+      <Transition name="fade">
+        <div v-if="errorMessage" class="modal-overlay" @click.self="clearError">
+          <div class="modal-content error-modal">
+            <button @click="clearError" class="close-modal modal-close-big">&times;</button>
+            <header class="modal-header">
+              <h3>Ошибка</h3>
+            </header>
+            <div class="modal-body">
+              <p>{{ errorMessage }}</p>
+              <div class="modal-actions">
+                <button class="btn-primary" @click="clearError">Понятно</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <ul v-if="isFocused && recentSearches.length > 0" class="suggestions-list">
         <li
           v-for="query in recentSearches"
@@ -39,7 +56,7 @@
       </ul>
     </div>
 
-    <div v-if="taskStatus && taskStatus !== 'completed' && taskStatus !== 'failed'" class="loading-status">
+    <div v-if="!isBackground && taskStatus && taskStatus !== 'completed' && taskStatus !== 'failed'" class="loading-status">
       <div class="spinner"></div>
       <p v-if="taskStatus === 'checking'">Подождите...</p>
       <p v-if="taskStatus === 'pending'">Задача в очереди...</p>
@@ -51,6 +68,12 @@
       >
         Повторная попытка анализа... (Попытка {{ taskRetryCount }}/3)
       </p>
+          <button class="bg-btn" @click="minimizeAnalysis">Оставить в фоне</button>
+    </div>
+
+    <div v-if="isBackground && taskStatus && taskStatus !== 'completed' && taskStatus !== 'failed'" class="background-hint">
+      Анализ идёт в фоне. Мы уведомим, когда он завершится.
+      <button class="link-btn" @click="restoreAnalysis">Показать статус</button>
     </div>
 
     <div v-if="taskStatus === 'failed'" class="error-status">
@@ -136,27 +159,28 @@
         </div>
       </div>
     </Transition>
-  </div>
+</div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import api from '../api/client'
 import auth from '../auth'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
+import { addTask, tasks as backgroundTasks } from '../analysisTracker'
 
 const urlOrQuery = ref('')
 const versions = ref([])
 const isLoading = ref(false)
 const taskStatus = ref(null)
 const taskRetryCount = ref(0)
+const currentTaskId = ref(null)
 const recentSearches = ref([])
 const isFocused = ref(false)
 const topProducts = ref([])
 const isTopProductsLoading = ref(true)
 const showLoginPrompt = ref(false)
+const errorMessage = ref('')
+const isBackground = ref(false)
 
 const scoreClass = (score) => {
   if (score >= 7) return 'score-good'
@@ -170,6 +194,26 @@ const rankClass = (index) => {
   if (index === 2) return 'rank-bronze'
   return ''
 }
+
+const currentTask = computed(() => {
+  return backgroundTasks.value.find(t => t.id === currentTaskId.value) || null
+})
+
+watch(
+  currentTask,
+  (task) => {
+    if (task) {
+      taskStatus.value = task.status
+      taskRetryCount.value = task.retry_count ?? 0
+    } else if (currentTaskId.value) {
+      taskStatus.value = null
+      taskRetryCount.value = 0
+      currentTaskId.value = null
+      isBackground.value = false
+    }
+  },
+  { deep: true }
+)
 
 onMounted(async () => {
   const saved = localStorage.getItem('recent_searches')
@@ -217,11 +261,14 @@ const handleSearch = async () => {
   if (!query) return;
 
   isFocused.value = false;
+  errorMessage.value = '';
+  currentTaskId.value = null;
   addToHistory(query);
   isLoading.value = true;
   versions.value = [];
   taskStatus.value = 'checking';
   taskRetryCount.value = 0;
+  isBackground.value = false;
 
   try {
     const res = await api.post('/products/check', { url: query });
@@ -243,7 +290,19 @@ const handleSearch = async () => {
     }
   } catch (e) {
     console.error("Детали ошибки:", e);
-    alert('Ошибка при связи с сервером');
+    const status = e.response?.status;
+    const detail = e.response?.data?.detail;
+
+    if (status === 400) {
+      errorMessage.value = detail || 'Ссылка или артикул не распознаны. Проверьте, что вы вставили ссылку Ozon или корректный артикул.';
+    } else if (status === 401) {
+      errorMessage.value = 'Для запуска анализа нужно войти в аккаунт.';
+      showLoginPrompt.value = true;
+    } else if (status === 429) {
+      errorMessage.value = detail || 'Дневной лимит запросов отчета исчерпан. Проверьте лимиты в профиле.';
+    } else {
+      errorMessage.value = 'Не удалось связаться с сервером. Попробуйте ещё раз позже.';
+    }
     isLoading.value = false;
     taskStatus.value = null; // Сбрасываем статус при ошибке
   }
@@ -258,9 +317,12 @@ const startNewTask = async () => {
     const status = res.data.status;
 
     if (newTaskId) {
+      currentTaskId.value = newTaskId;
       taskStatus.value = status;
       taskRetryCount.value = 0;
-      pollTaskStatus(newTaskId);
+      isBackground.value = false;
+      isLoading.value = false;
+      addTask(newTaskId);
     } else {
       console.error("Сервер не вернул ID задачи:", res.data);
       isLoading.value = false;
@@ -268,45 +330,47 @@ const startNewTask = async () => {
     }
   } catch (e) {
     console.error("Ошибка при создании задачи:", e);
+    const status = e.response?.status;
+    const detail = e.response?.data?.detail;
+
+    if (status === 400) {
+      errorMessage.value = detail || 'Ссылка или артикул не распознаны. Проверьте, что вы вставили ссылку Ozon или корректный артикул.';
+    } else if (status === 401) {
+      errorMessage.value = 'Для запуска анализа нужно войти в аккаунт.';
+      showLoginPrompt.value = true;
+    } else if (status === 403) {
+      errorMessage.value = detail || 'Недостаточно прав для запуска анализа на текущем тарифе.';
+    } else if (status === 429) {
+      errorMessage.value = detail || 'Дневной лимит анализов исчерпан. Проверьте лимиты в профиле.';
+    } else {
+      errorMessage.value = 'Не удалось создать задачу на анализ. Попробуйте позже.';
+    }
     isLoading.value = false;
     taskStatus.value = null;
   }
 }
 
-const pollTaskStatus = (taskId) => {
-  const interval = setInterval(async () => {
-    try {
-      const res = await api.get(`/tasks/status/${taskId}`);
-      const taskData = res.data;
-      taskStatus.value = taskData.status;
-      taskRetryCount.value = taskData.retry_count ?? 0;
-
-      if (taskData.status === 'completed') {
-        clearInterval(interval);
-        isLoading.value = false;
-        if (taskData.ozon_id && taskData.product_id) {
-          router.push(`/product/${taskData.ozon_id}/${taskData.product_id}`);
-        } else {
-          console.error("Данные для редиректа отсутствуют:", taskData);
-        }
-      } else if (taskData.status === 'failed') {
-        clearInterval(interval);
-        isLoading.value = false;
-      }
-    } catch (e) {
-      console.error("Ошибка опроса статуса:", e);
-      clearInterval(interval);
-      isLoading.value = false;
-      taskStatus.value = null;
-    }
-  }, 2000);
-};
 
 const retryAfterFail = () => {
   taskStatus.value = null;
   taskRetryCount.value = 0;
+  currentTaskId.value = null;
   isLoading.value = false;
+  errorMessage.value = '';
+  isBackground.value = false;
 };
+
+const clearError = () => {
+  errorMessage.value = ''
+}
+
+const minimizeAnalysis = () => {
+  isBackground.value = true
+}
+
+const restoreAnalysis = () => {
+  isBackground.value = false
+}
 </script>
 
 <style scoped>
@@ -510,6 +574,19 @@ const retryAfterFail = () => {
   font-size: 0.9rem;
   background: #f0f6ff;
   color: #005bff;
+  border: none;
+  outline: none;
+  border-radius: 10px;
+}
+
+.open-btn:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.open-btn:focus-visible {
+  outline: 2px solid #005bff;
+  outline-offset: 2px;
 }
 
 .update-card {
@@ -528,6 +605,44 @@ const retryAfterFail = () => {
 .loading-status {
   text-align: center;
   padding: 20px;
+}
+.bg-btn {
+  margin-top: 12px;
+  background: #f0f2f5;
+  color: #333;
+  border: 1px solid #e0e0e0;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.bg-btn:hover {
+  background: #e4e6e9;
+}
+
+.background-hint {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: #f0f6ff;
+  border: 1px solid #d6e7ff;
+  color: #1a3d8f;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.background-hint .link-btn {
+  background: #005bff;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.background-hint .link-btn:hover {
+  background: #0046d5;
 }
 
 .error-status {
@@ -841,4 +956,85 @@ const retryAfterFail = () => {
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 460px;
+  padding: 28px;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.error-modal .modal-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.error-modal .modal-body p {
+  margin: 12px 0 0 0;
+  color: #444;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.btn-primary {
+  background: #005bff;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #0046d5;
+}
+
+.modal-header {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 12px;
+}
+
+.modal-body {
+  padding-top: 6px;
+}
+
+.modal-close-big {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #888;
+}
 </style>
+
+
+
+

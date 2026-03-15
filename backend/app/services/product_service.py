@@ -1,10 +1,11 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+﻿from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
-from typing import List
+from typing import List, Optional
 
 from app.repositories import ProductRepository
 from app.schemas import SProductCheck, SProductFull, SProductVersionsList, SProductVersion, SAiAnalysisResponse, SProductTopItem
 from app.models import Product, AiSummary, ProductMetric
+from app.models.user import User
 from app.utils import extract_ozon_id
 
 
@@ -25,7 +26,10 @@ class ProductService:
         Получает список всех версий товара.
         Если версий нет — возвращает пустой список.
         """
-        ozon_id = extract_ozon_id(url)
+        try:
+            ozon_id = extract_ozon_id(url)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         products = await self.product_repo.get_all_versions(ozon_id)
 
         versions = [
@@ -140,3 +144,29 @@ class ProductService:
                 print(f"Ошибка кастомной метрики {pm.metric.name}: {e}")
 
         return await self.product_repo.save_all(product)
+    async def delete_product(self, product_id: int, user: Optional[User]) -> dict:
+        """Удалить товар и все связанные данные (только для администраторов)."""
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Необходима авторизация",
+            )
+
+        if 'admin.panel' not in user.active_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав для удаления товара",
+            )
+
+        product = await self.product_repo.get_by_product_id_full(product_id)
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Товар с ID {product_id} не найден",
+            )
+
+        await self.product_repo.delete_tasks_by_product_id(product_id)
+        await self.product_repo.delete_product(product)
+        return {"id": product_id, "deleted": True}
+
+

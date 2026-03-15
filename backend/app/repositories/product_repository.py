@@ -1,7 +1,8 @@
-from sqlalchemy import select, func
+﻿from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models.product import Product, Metric
+from app.models.task import Task
 from typing import Optional, List
 
 
@@ -75,7 +76,7 @@ class ProductRepository:
         return result.scalars().first()
 
     async def save_all(self, product: Product):
-        """Сохраняет продукт и все связанные с ним объекты (summary, metrics, etc.)"""
+        """РЎРѕС…СЂР°РЅСЏРµС‚ РїСЂРѕРґСѓРєС‚ Рё РІСЃРµ СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ РЅРёРј РѕР±СЉРµРєС‚С‹ (summary, metrics, etc.)"""
         self.db.add(product)
         await self.db.commit()
         await self.db.refresh(product)
@@ -109,4 +110,13 @@ class ProductRepository:
         )
         result = await self.db.execute(query)
         return list(result.scalars().all())
+    async def delete_tasks_by_product_id(self, product_id: int) -> None:
+        """Удалить все задачи, связанные с товаром."""
+        await self.db.execute(delete(Task).where(Task.product_id == product_id))
+
+    async def delete_product(self, product: Product) -> None:
+        """Удалить товар и сохранить изменения."""
+        await self.db.delete(product)
+        await self.db.commit()
+
 

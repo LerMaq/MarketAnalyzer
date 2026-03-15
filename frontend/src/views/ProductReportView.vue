@@ -114,6 +114,10 @@
               </div>
             </div>
 
+            <div v-if="chatError" class="chat-error-banner">
+              {{ chatError }}
+            </div>
+
             <div class="chat-messages" ref="chatBox" @scroll="handleScroll">
               <div v-if="messages.length === 0" class="empty-chat">
                 Спросите что-нибудь о товаре, например: <br/>
@@ -136,14 +140,14 @@
                 v-model="userInput"
                 @keyup.enter="sendMessage"
                 placeholder="Введите вопрос..."
-                :disabled="isStreaming"
+                :disabled="isStreaming || !!chatError"
               />
 
               <button v-if="isStreaming" @click="stopGeneration" class="stop-btn" title="Остановить">
                 <span class="stop-icon">■</span>
               </button>
 
-              <button v-else @click="sendMessage" :disabled="!userInput">
+              <button v-else @click="sendMessage" :disabled="!userInput || !!chatError">
                 <span>➤</span>
               </button>
             </div>
@@ -308,6 +312,7 @@ const isChatsMenuOpen = ref(false)
 const selectedMetric = ref(null)
 const isSummaryExpanded = ref(false)
 const abortController = ref(null)
+const chatError = ref('')
 
 const userKeys = ref([])
 const selectedKeyId = ref(null)
@@ -417,6 +422,11 @@ const loadChatMessages = async (id) => {
     scrollToBottom()
   } catch (e) {
     console.error("Ошибка загрузки сообщений:", e)
+    const status = e.response?.status
+    const detail = e.response?.data?.detail
+    if (status === 429) {
+      chatError.value = detail || 'Дневной лимит сообщений в чате исчерпан. Попробуйте завтра или обновите тариф в профиле.'
+    }
   }
 }
 
@@ -424,6 +434,7 @@ const startNewChat = () => {
   chatId.value = null
   messages.value = []
   isChatsMenuOpen.value = false
+  chatError.value = ''
 }
 
 onMounted(async () => {
@@ -466,6 +477,11 @@ const loadUserKeys = async () => {
     selectedKeyId.value = active ? active.id : null
   } catch (e) {
     console.error('Не удалось получить ключи ИИ пользователя:', e)
+    const status = e.response?.status
+    const detail = e.response?.data?.detail
+    if (status === 429) {
+      chatError.value = detail || 'Дневной лимит запросов к ИИ исчерпан. Попробуйте завтра или измените тариф.'
+    }
   }
 }
 
@@ -481,6 +497,11 @@ const onModelSelect = async () => {
     })
   } catch (e) {
     console.error('Ошибка при переключении модели:', e)
+    const status = e.response?.status
+    const detail = e.response?.data?.detail
+    if (status === 429) {
+      chatError.value = detail || 'Дневной лимит запросов к ИИ исчерпан. Попробуйте завтра или измените тариф.'
+    }
   }
 }
 
@@ -504,6 +525,9 @@ const submitAddKey = async () => {
     closeAddKeyModal()
   } catch (e) {
     console.error('Не удалось добавить ключ ИИ:', e)
+    const status = e.response?.status
+    const detail = e.response?.data?.detail
+    chatError.value = detail || 'Не удалось добавить модель ИИ. Попробуйте ещё раз позже.'
   }
 }
 
@@ -522,6 +546,9 @@ const submitDeleteKey = async () => {
     deleteKeyId.value = null
   } catch (e) {
     console.error('Не удалось удалить ключ ИИ:', e)
+    const status = e.response?.status
+    const detail = e.response?.data?.detail
+    chatError.value = detail || 'Не удалось удалить модель ИИ. Попробуйте ещё раз позже.'
   }
 }
 
@@ -561,6 +588,8 @@ const sendMessage = async () => {
   if (!userInput.value || isStreaming.value) return
 
   abortController.value = new AbortController()
+  chatError.value = ''
+  let streamHadError = false
 
   const text = userInput.value
   messages.value.push({ role: 'user', content: text })
@@ -594,6 +623,13 @@ const sendMessage = async () => {
     })
 
     if (!response.ok || !response.body) {
+      if (response.status === 401) {
+        chatError.value = 'Для использования чата нужно войти в аккаунт.'
+      } else if (response.status === 429) {
+        chatError.value = 'Дневной лимит сообщений в чате исчерпан. Попробуйте завтра или обновите тариф.'
+      } else {
+        chatError.value = 'Не удалось начать ответ ИИ. Попробуйте ещё раз.'
+      }
       throw new Error(`Stream request failed with status ${response.status}`)
     }
 
@@ -616,6 +652,11 @@ const sendMessage = async () => {
         if (trimmed.includes('[DONE]')) break
 
         let content = trimmed.startsWith('data: ') ? trimmed.replace('data: ', '') : trimmed
+        if (content.startsWith('Error:')) {
+          chatError.value = content.replace('Error:', '').trim() || 'Произошла ошибка при получении ответа ИИ. Попробуйте ещё раз.'
+          streamHadError = true
+          break
+        }
         streamingText.value += content
 
         if (!userIsScrolling.value) {
@@ -624,7 +665,12 @@ const sendMessage = async () => {
         }
       }
 
-      if (chunk.includes('[DONE]')) break
+      if (streamHadError || chunk.includes('[DONE]')) break
+    }
+
+    if (streamHadError) {
+      streamingText.value = ''
+      return
     }
 
     const finalData = await api.get(`/chat/${chatId.value}/messages`)
@@ -634,6 +680,9 @@ const sendMessage = async () => {
     streamingText.value = ''
   } catch (e) {
     console.error("Ошибка стрима:", e)
+    if (!chatError.value) {
+      chatError.value = 'Произошла ошибка при получении ответа ИИ. Попробуйте ещё раз.'
+    }
   } finally {
     isStreaming.value = false
     if (!abortController.value?.signal.aborted) {
