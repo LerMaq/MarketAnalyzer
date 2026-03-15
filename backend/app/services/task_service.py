@@ -168,7 +168,7 @@ class TaskService:
 
     async def process_stale_fetching_tasks(self) -> None:
         """Сбрасывает застрявшие fetching задачи: retry++, pending, clear worker. При 3-й попытке — failed + refund."""
-        stale = await self.task_repo.get_stale_fetching_tasks(stale_seconds=50)
+        stale = await self.task_repo.get_stale_fetching_tasks(stale_seconds=80)
         for task in stale:
             current = await self.task_repo.get_by_id(task.id)
             if not current or current.status != TaskStatus.fetching:

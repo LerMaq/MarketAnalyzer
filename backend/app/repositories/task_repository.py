@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from sqlalchemy import select, update, or_, case, exists, and_
+from sqlalchemy import select, update, or_, case, exists, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.task import Task, TaskStatus
 from app.models.user import UserRank, Rank, RankPermission, Permission
@@ -89,9 +89,9 @@ class TaskRepository:
         await self.db.execute(query)
         await self.db.commit()
 
-    async def get_stale_fetching_tasks(self, stale_seconds: int = 50) -> List[Task]:
+    async def get_stale_fetching_tasks(self, stale_seconds: int = 80) -> List[Task]:
         """Возвращает задачи в статусе fetching, у которых updated_at старше stale_seconds секунд."""
-        threshold = datetime.now() - timedelta(seconds=stale_seconds)
+        threshold = func.now() - timedelta(seconds=stale_seconds)
         query = select(Task).where(
             Task.status == TaskStatus.fetching,
             Task.updated_at < threshold,
