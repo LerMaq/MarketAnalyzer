@@ -115,12 +115,34 @@
         <p>Топ товаров пока нет</p>
       </div>
     </section>
+
+    <!-- Modal for unauthenticated users when no reports found -->
+    <Transition name="fade">
+      <div v-if="showLoginPrompt" class="modal-overlay" @click.self="showLoginPrompt = false">
+        <div class="modal-content auth-prompt-modal">
+          <button @click="showLoginPrompt = false" class="close-modal modal-close-big">&times;</button>
+          <header class="modal-header">
+            <h3>Анализ не найден</h3>
+          </header>
+          <div class="modal-body">
+            <div class="prompt-icon">🔍</div>
+            <p>Этот товар еще не был проанализирован нашей нейросетью.</p>
+            <p>Чтобы запустить глубокий анализ отзывов и характеристик, необходимо <strong>авторизоваться</strong>.</p>
+            <div class="modal-actions">
+              <button @click="showLoginPrompt = false" class="btn-secondary">Отмена</button>
+              <button @click="$router.push('/login')" class="btn-primary">Войти и начать</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '../api/client'
+import auth from '../auth'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -134,6 +156,7 @@ const recentSearches = ref([])
 const isFocused = ref(false)
 const topProducts = ref([])
 const isTopProductsLoading = ref(true)
+const showLoginPrompt = ref(false)
 
 const scoreClass = (score) => {
   if (score >= 7) return 'score-good'
@@ -209,7 +232,14 @@ const handleSearch = async () => {
       isLoading.value = false;
       taskStatus.value = null; // Сбрасываем статус, так как версии найдены
     } else {
-      await startNewTask(); // Переходим к созданию задачи
+      // Если версий нет и пользователь не авторизован — показываем модалку
+      if (!auth.user.value) {
+        isLoading.value = false;
+        taskStatus.value = null;
+        showLoginPrompt.value = true;
+      } else {
+        await startNewTask(); // Переходим к созданию задачи
+      }
     }
   } catch (e) {
     console.error("Детали ошибки:", e);
@@ -688,5 +718,106 @@ button:disabled { background: #ccc; }
   padding: 40px 20px;
   color: #999;
   font-style: italic;
+}
+
+/* Auth Prompt Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 450px;
+  padding: 30px;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.modal-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.3rem;
+}
+
+.modal-close-big {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #888;
+}
+
+.prompt-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.modal-body p {
+  line-height: 1.6;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 25px;
+}
+
+.modal-actions button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-secondary {
+  background: #f0f2f5;
+  color: #333;
+}
+
+.btn-secondary:hover {
+  background: #e4e6e9;
+}
+
+.btn-primary {
+  background: #005bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0046d5;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 </style>

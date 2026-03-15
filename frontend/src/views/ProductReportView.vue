@@ -66,7 +66,7 @@
         </div>
 
         <aside class="chat-panel">
-          <div class="chat-container">
+          <div class="chat-container" :class="{ 'is-blurred': !isAuthenticated }">
             <div class="chat-header">
               <div class="header-info">
                 <span class="status-dot"></span>
@@ -150,6 +150,16 @@
                 </svg>
               </button>
               <button @click="addUserKey">Добавить модель</button>
+            </div>
+
+            <!-- Overlay for unauthenticated users -->
+            <div v-if="!isAuthenticated" class="chat-overlay">
+              <div class="overlay-content">
+                <span class="lock-icon">🔒</span>
+                <h3>Чат доступен после входа</h3>
+                <p>Авторизуйтесь, чтобы задавать вопросы ИИ о товаре</p>
+                <button @click="$router.push('/login')" class="login-btn">Войти в аккаунт</button>
+              </div>
             </div>
           </div>
         </aside>
@@ -245,8 +255,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import api from '../api/client'
+import auth from '../auth'
 import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({ breaks: true, linkify: true })
@@ -277,6 +288,8 @@ const newKeyData = ref({
 
 const showDeleteConfirm = ref(false)
 const deleteKeyId = ref(null)
+
+const isAuthenticated = computed(() => !!auth.user.value)
 
 const syncMessagesWithRetry = async (maxAttempts = 3, delay = 500) => {
   for (let i = 0; i < maxAttempts; i++) {
@@ -753,6 +766,75 @@ const sendMessage = async () => {
   flex-direction: column;
   position: sticky;
   top: 20px;
+  overflow: hidden;
+}
+
+.chat-container.is-blurred > *:not(.chat-overlay) {
+  filter: blur(5px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.chat-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+  text-align: center;
+}
+
+.overlay-content {
+  background: white;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0, 91, 255, 0.15);
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.lock-icon {
+  font-size: 2.5rem;
+  margin-bottom: 5px;
+}
+
+.overlay-content h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #1a1a1a;
+}
+
+.overlay-content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #666;
+  line-height: 1.4;
+}
+
+.login-btn {
+  margin-top: 10px;
+  background: #005bff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.login-btn:hover {
+  background: #0046d5;
 }
 
 .chat-header {
