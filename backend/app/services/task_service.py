@@ -57,9 +57,13 @@ class TaskService:
 
     async def take_task_for_worker(self, user: Optional[User]) -> Optional[STaskWorkerTake]:
         await self.verify_worker_access(user)
-        task = await self.task_repo.get_next_pending()
+        
+        # Пытаемся получить задачу атомарно
+        task = await self.task_repo.get_next_pending_and_assign(user.id)
         if task:
-            return await self._mark_and_return(task, user.id)
+            return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+
+        # Если задач нет, переходим к long-polling
         await self.db.rollback()
         notification_queue = asyncio.Queue()
 
@@ -74,13 +78,16 @@ class TaskService:
             await driver.add_listener("new_task_channel", on_notification)
 
         try:
+            # Ждем уведомления о новой задаче
             await asyncio.wait_for(notification_queue.get(), timeout=30.0)
-            task = await self.task_repo.get_next_pending()
+            
+            # После уведомления снова пытаемся атомарно взять задачу
+            task = await self.task_repo.get_next_pending_and_assign(user.id)
             if task:
-                return await self._mark_and_return(task, user.id)
+                return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
                 
         except asyncio.TimeoutError:
-            return None
+            return None # Возвращаем пустой ответ, если за 30 секунд ничего не появилось
         except Exception as e:
             print(f"Ошибка в Long Polling: {e}")
             return None
@@ -89,15 +96,9 @@ class TaskService:
                 try:
                     await driver.remove_listener("new_task_channel", on_notification)
                 except:
-                    pass
+                    pass # Игнорируем ошибки при удалении слушателя
         
         return None
-
-    async def _mark_and_return(self, task, worker_id: int) -> STaskWorkerTake:
-        await self.task_repo.update_status(
-            task.id, TaskStatus.fetching, worker_id=worker_id
-        )
-        return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
 
     async def get_task_info(self, task_id: int) -> STask:
         task = await self.task_repo.get_by_id(task_id)

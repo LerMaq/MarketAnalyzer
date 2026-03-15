@@ -33,7 +33,8 @@ class TaskRepository:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_next_pending(self) -> Optional[Task]:
+    async def get_next_pending_and_assign(self, worker_id: int) -> Optional[Task]:
+        """Атомарно получает задачу и назначает её воркеру."""
         now = datetime.now()
         priority_exists = exists().where(
             and_(
@@ -47,6 +48,8 @@ class TaskRepository:
         ).correlate(Task)
 
         order_priority = case((priority_exists, 0), else_=1)
+        
+        # 1. Находим подходящую задачу
         query = (
             select(Task)
             .where(Task.status == TaskStatus.pending)
@@ -55,7 +58,17 @@ class TaskRepository:
             .with_for_update(skip_locked=True)
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        task = result.scalar_one_or_none()
+
+        if task:
+            # 2. Обновляем её, присваивая worker_id
+            task.worker_id = worker_id
+            task.status = TaskStatus.fetching
+            await self.db.commit()
+            await self.db.refresh(task)
+            return task
+        
+        return None
 
     async def update_status(
         self,
