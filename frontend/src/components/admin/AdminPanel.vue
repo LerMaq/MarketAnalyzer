@@ -1195,6 +1195,7 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  justify-content: center;
 }
 
 /* Колонки для метрик */
@@ -1217,7 +1218,8 @@ onMounted(async () => {
 
 .col-actions {
   display: flex;
-  gap: 6px;
+  gap: 3px;
+  padding: 12px 5px !important;
 }
 
 .edit-btn, .save-btn, .cancel-btn, .delete-btn {
@@ -1659,6 +1661,13 @@ onMounted(async () => {
   margin-bottom: 6px;
 }
 
+.model-view-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 100%
+}
+
 .model-main {
   display: flex;
   flex-direction: row;
@@ -1812,6 +1821,8 @@ input:checked + .toggle-slider:before {
 /* Config Card */
 .config-header {
   display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 12px;
