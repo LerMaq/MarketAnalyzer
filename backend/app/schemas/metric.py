@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict
 
 class SMetric(BaseModel):
     """Схема конкретной метрики (например, 'Качество материала')"""
+    id: int
     name: str
     description: str
     weight: float

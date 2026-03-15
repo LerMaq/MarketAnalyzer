@@ -4,6 +4,7 @@ from .ai import router as ai_router
 from .chat import router as chat_router
 from .auth import router as auth_router
 from .user import router as user_router
+from .admin import router as admin_router
 
 __all__ = [
     "products_router",
@@ -11,5 +12,6 @@ __all__ = [
     "ai_router",
     "chat_router",
     "auth_router",
-    "user_router"
+    "user_router",
+    "admin_router"
 ]

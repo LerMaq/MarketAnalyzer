@@ -12,6 +12,10 @@ async function loadUser() {
   }
 }
 
+async function getCurrentUser() {
+  return user.value
+}
+
 async function login(email, password) {
   const res = await api.post('/auth/login', { email, password })
   await loadUser()
@@ -32,6 +36,7 @@ async function logout() {
 export default {
   user,
   loadUser,
+  getCurrentUser,
   login,
   register,
   logout

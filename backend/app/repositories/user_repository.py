@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import select, delete, update
 from sqlalchemy.orm import selectinload, joinedload
 from datetime import datetime, timezone, timedelta
@@ -144,3 +144,75 @@ class UserRepository:
         if user:
             await self.db.delete(user)
         await self.db.commit()
+
+    async def search_users_by_email(self, email_query: str) -> List[User]:
+        """Поиск пользователей по email (частичное совпадение)"""
+        query = select(User).where(User.email.ilike(f"%{email_query}%"))
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_user_usage_stats(self, user_id: int) -> dict:
+        """Получить статистику использования пользователя за сегодня"""
+        today = datetime.now(timezone.utc).date()
+        query = select(UserUsage).where(
+            UserUsage.user_id == user_id,
+            UserUsage.usage_date == today
+        )
+        result = await self.db.execute(query)
+        usage = result.scalar_one_or_none()
+        
+        if not usage:
+            return {"analysis": 0, "chat": 0}
+        
+        return {
+            "analysis": usage.analysis_count,
+            "chat": usage.chat_count
+        }
+
+    async def assign_rank(self, user_id: int, rank_name: str, expires_at: Optional[datetime] = None) -> UserRank:
+        """Назначить пользователю ранг"""
+        # Получаем ранг по имени
+        rank_res = await self.db.execute(select(Rank).where(Rank.name == rank_name))
+        rank = rank_res.scalar_one_or_none()
+        if not rank:
+            raise ValueError(f"Rank '{rank_name}' not found")
+        
+        # Создаем связь UserRank
+        user_rank = UserRank(
+            user_id=user_id,
+            rank_id=rank.id,
+            expires_at=expires_at
+        )
+        self.db.add(user_rank)
+        await self.db.commit()
+        await self.db.refresh(user_rank)
+        return user_rank
+
+    async def remove_rank(self, user_id: int, rank_name: str) -> bool:
+        """Удалить ранг у пользователя"""
+        rank_res = await self.db.execute(select(Rank).where(Rank.name == rank_name))
+        rank = rank_res.scalar_one_or_none()
+        if not rank:
+            return False
+        
+        stmt = delete(UserRank).where(
+            UserRank.user_id == user_id,
+            UserRank.rank_id == rank.id
+        )
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount > 0
+
+    async def get_all_ranks(self) -> List[Rank]:
+        """Получить все доступные ранги"""
+        result = await self.db.execute(select(Rank))
+        return result.scalars().all()
+
+    async def get_user_with_ranks(self, user_id: int) -> Optional[User]:
+        """Получить пользователя со всеми рангами"""
+        result = await self.db.execute(
+            select(User).options(
+                selectinload(User.user_ranks).selectinload(UserRank.rank)
+            ).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()

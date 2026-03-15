@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.database import create_tables
-from app.routes import products_router, tasks_router, ai_router, chat_router, auth_router, user_router
+from app.routes import products_router, tasks_router, ai_router, chat_router, auth_router, user_router, admin_router
 from app.services.task_watcher import run_task_watcher
 
 
@@ -41,3 +41,4 @@ app.include_router(ai_router)
 app.include_router(chat_router)
 app.include_router(auth_router)
 app.include_router(user_router)
+app.include_router(admin_router)
