@@ -52,17 +52,17 @@ class AIService:
         standards_text = "\n".join([f"- {m.name}: {m.description}. Вес: {m.weight}" for m in standards])
         customs_text = "\n".join([f"- {m.name}: {m.description}. Вес: {m.weight}" for m in customs])
 
-        system_content = (
+        user_content = (
             f"СПРАВОЧНИК МЕТРИК, ИМЕЮЩИХСЯ В БАЗЕ ДАННЫХ:\n\n"
             f"Стандартные метрики (product_metrics_standard) — выбери любые 5:\n{standards_text}\n\n"
             f"Метрики, ранее созданные нейросетью (product_metrics_custom) — можешь использовать некоторые "
             f"отсюда, если они подходят. Если нет — придумай новую:\n{customs_text}\n\n"
             f"ДАННЫЕ ТОВАРА ДЛЯ АНАЛИЗА:\n{raw_content}"
+            f"ЗАДАНИЕ: Проанализируй товар и выдай JSON строго по структуре из системной инструкции."
         )
 
         messages = [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": f"ПРОАНАЛИЗИРУЙ ДАННЫЕ ЭТОГО ТОВАРА:\n{raw_content}"}
+            {"role": "user", "content": user_content}
         ]
         print(f"В нейросеть отправляются следующие данные о товаре для анализа:"
               f"{messages}")
