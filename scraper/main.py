@@ -84,9 +84,11 @@ def force_activate_chrome():
         pyautogui.click(rect[0] + 150, rect[1] + 10) 
     except:
         pass
-    
+
     time.sleep(0.5)
-    pyautogui.press('esc')
+    # Имитируем реальную активность
+    pyautogui.press('f6')  # Фокус на адресную строку
+    time.sleep(0.2)
     return True
 
 def run_ozon_scraping(ozon_id):
@@ -273,20 +275,55 @@ def preprocess_raw_content(text: str) -> str:
 
     return result_text
 
+async def complete_task_with_retry(client, task_id, payload, retries=5):
+    """Пытается отправить результат несколько раз прежде чем сдаться"""
+    for i in range(retries):
+        try:
+            resp = await client.post(f"{BASE_URL}/tasks/complete/{task_id}", json=payload)
+            if resp.status_code == 200:
+                print(f"✅ Задача #{task_id} успешно сдана!")
+                return True
+            print(f"⚠️ Сервер ответил {resp.status_code} при сдаче. Попытка {i+1}")
+        except Exception as e:
+            print(f"❌ Ошибка сети при сдаче #{task_id} (попытка {i+1}): {e}")
+        
+        await asyncio.sleep(2 * (i + 1)) # Экспоненциальная задержка
+    return False
+
 
 async def main():
     print("Воркер запущен...")
     token = await get_valid_token()
     if not token: return
 
-    timeout = httpx.Timeout(40.0, connect=5.0)
+    timeout = httpx.Timeout(45.0, connect=10.0)
     async with httpx.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=timeout) as client:
         while True:
             try:
                 print(f"\n📡 [{time.strftime('%H:%M:%S')}] Ожидание задачи...")
                 response = await client.get(f"{BASE_URL}/tasks/take")
                 
-                if response.status_code == 401:
+                if response.status_code == 200:
+                    task = response.json()
+                    if task:
+                        task_id, ozon_id = task["task_id"], task["ozon_id"]
+                        print(f"🚀 В работе задача #{task_id}")
+
+                        scraped = run_ozon_scraping(ozon_id)
+                        if scraped:
+                            payload = {
+                                "raw_content": scraped["raw_content"],
+                                "price": 0, "name": "N/A"
+                            }
+                            # Отправляем с повторами
+                            success = await complete_task_with_retry(client, task_id, payload)
+                            if not success:
+                                print(f"!!! Критиченская ошибка: Не удалось сдать задачу {task_id}")
+                        continue 
+                    else:
+                        await asyncio.sleep(1)
+                
+                elif response.status_code == 401:
                     print("Получен 401 Unauthorized. Требуется повторная авторизация.")
                     new_token = await login()
                     if new_token:
@@ -297,29 +334,12 @@ async def main():
                         print("Авторизация не удалась. Повтор через 5 секунд.")
                     await asyncio.sleep(5)
                     continue
+                else:
+                    print(f"Сервер ответил: {response.status_code}")
+                    await asyncio.sleep(5)
 
-                if response.status_code == 200:
-                    task = response.json()
-                    if task:
-                        task_id = task["task_id"]
-                        ozon_id = task["ozon_id"]
-                        print(f"В работе задача #{task_id}")
-
-                        scraped = run_ozon_scraping(ozon_id)
-                        if scraped:
-                            payload = {
-                                "raw_content": scraped["raw_content"],
-                                "price": 0,
-                                "name": "N/A"
-                            }
-                            await client.post(f"{BASE_URL}/tasks/complete/{task_id}", json=payload)
-                            print(f"Готово!")
-                    else:
-                        print("Задач нет.")
-                
-                await asyncio.sleep(5)
             except Exception as e:
-                print(f"Ошибка: {e}")
+                print(f"🛑 Ошибка в главном цикле: {e}")
                 await asyncio.sleep(5)
 
 if __name__ == "__main__":

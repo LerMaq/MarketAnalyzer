@@ -43,7 +43,11 @@ async def delete_tables():
 SQL_CREATE_FUNCTION = """
 CREATE OR REPLACE FUNCTION notify_new_task() RETURNS trigger AS $$
 BEGIN
-  PERFORM pg_notify('new_task_channel', NEW.id::text);
+  -- Уведомляем только при вставке новой или если статус сменился на pending
+  IF (TG_OP = 'INSERT' AND NEW.status = 'pending') OR 
+     (TG_OP = 'UPDATE' AND NEW.status = 'pending' AND OLD.status != 'pending') THEN
+    PERFORM pg_notify('new_task_channel', NEW.id::text);
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

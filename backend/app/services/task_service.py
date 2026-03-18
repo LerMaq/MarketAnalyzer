@@ -57,47 +57,43 @@ class TaskService:
 
     async def take_task_for_worker(self, user: Optional[User]) -> Optional[STaskWorkerTake]:
         await self.verify_worker_access(user)
-        
-        # Пытаемся получить задачу атомарно
+
+        # 1. Первая быстрая проверка (без ожидания)
         task = await self.task_repo.get_next_pending_and_assign(user.id)
         if task:
             return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
 
-        # Если задач нет, переходим к long-polling
-        await self.db.rollback()
-        notification_queue = asyncio.Queue()
+        # 2. Если пусто — создаем отдельное соединение для ожидания
+        # Используем raw_connection из того же движка, но не через сессию
+        async with self.db.bind.connect() as conn:
+            # Получаем доступ к низкоуровневому драйверу (asyncpg)
+            raw_conn = await conn.get_raw_connection()
+            driver_conn = raw_conn.driver_connection
 
-        def on_notification(connection, pid, channel, payload):
-            notification_queue.put_nowait(payload)
+            queue = asyncio.Queue()
 
-        conn = await self.db.connection()
-        raw_conn = await conn.get_raw_connection()
-        driver = getattr(raw_conn, 'driver_connection', None)
+            def on_notification(*args):
+                queue.put_nowait(True)
 
-        if driver:
-            await driver.add_listener("new_task_channel", on_notification)
+            # Подписываемся на канал
+            await driver_conn.add_listener("new_task_channel", on_notification)
 
-        try:
-            # Ждем уведомления о новой задаче
-            await asyncio.wait_for(notification_queue.get(), timeout=30.0)
-            
-            # После уведомления снова пытаемся атомарно взять задачу
-            task = await self.task_repo.get_next_pending_and_assign(user.id)
-            if task:
-                return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
-                
-        except asyncio.TimeoutError:
-            return None # Возвращаем пустой ответ, если за 30 секунд ничего не появилось
-        except Exception as e:
-            print(f"Ошибка в Long Polling: {e}")
-            return None
-        finally:
-            if driver and not driver.is_closed():
+            try:
+                # Сразу после подписки проверяем ЕЩЕ РАЗ (чтобы не проспать задачу)
+                task = await self.task_repo.get_next_pending_and_assign(user.id)
+                if task: return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+
+                # Ждем уведомления ровно 25 секунд
                 try:
-                    await driver.remove_listener("new_task_channel", on_notification)
-                except:
-                    pass # Игнорируем ошибки при удалении слушателя
-        
+                    await asyncio.wait_for(queue.get(), timeout=25.0)
+                    # Как только "пинг" пришел — возвращаемся в основную сессию за задачей
+                    task = await self.task_repo.get_next_pending_and_assign(user.id)
+                    if task: return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+                except asyncio.TimeoutError:
+                    return None  # Выходим по тайм-ауту, воркер перезайдет
+            finally:
+                await driver_conn.remove_listener("new_task_channel", on_notification)
+
         return None
 
     async def get_task_info(self, task_id: int) -> STask:
@@ -119,6 +115,12 @@ class TaskService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Завершить задачу может только воркер, который её взял",
             )
+
+        if task.status != TaskStatus.fetching:
+            return {
+                "status": "ignored", 
+                "message": f"Задача уже находится в статусе {task.status.value}, обработка не требуется"
+            }
 
         report_text = worker_data.raw_content
         if len(report_text) < 5000:

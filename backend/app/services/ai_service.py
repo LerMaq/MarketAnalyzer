@@ -53,7 +53,6 @@ class AIService:
         customs_text = "\n".join([f"- {m.name}: {m.description}. Вес: {m.weight}" for m in customs])
 
         system_content = (
-            f"{config.system_instruction}\n\n"
             f"СПРАВОЧНИК МЕТРИК, ИМЕЮЩИХСЯ В БАЗЕ ДАННЫХ:\n\n"
             f"Стандартные метрики (product_metrics_standard) — выбери любые 5:\n{standards_text}\n\n"
             f"Метрики, ранее созданные нейросетью (product_metrics_custom) — можешь использовать некоторые "
