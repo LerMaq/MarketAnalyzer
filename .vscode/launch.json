@@ -22,11 +22,11 @@
             "type": "debugpy",
             "name": "🤖 Launch Scraper",
             "request": "launch",
-            "program": "${workspaceFolder}/scraper/main.py",
+            "program": "${workspaceFolder}/scraper/windows/main.py",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/scraper",
-            "envFile": "${workspaceFolder}/scraper/.env",
-            "python": "${workspaceFolder}/scraper/.venv/Scripts/python.exe"
+            "cwd": "${workspaceFolder}/scraper/windows",
+            "envFile": "${workspaceFolder}/scraper/windows/.env",
+            "python": "${workspaceFolder}/scraper/windows/.venv/Scripts/python.exe"
         }
     ]
 }
