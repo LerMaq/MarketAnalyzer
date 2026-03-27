@@ -1,0 +1,20 @@
+# OzonAI Scraper - Зависимости
+
+# === ОБЩИЕ ЗАВИСИМОСТИ ===
+# Работают на всех платформах
+httpx>=0.28.1
+anyio>=4.12.1
+python-dotenv>=1.2.2
+
+# === GUI АВТОМАТИЗАЦИЯ ===
+# PyAutoGUI + зависимости
+PyAutoGUI>=0.9.54
+pillow>=12.1.1
+
+# === ПЛАТФОРМО-СПЕЦИФИЧНЫЕ ===
+# Windows (pywin32, pygetwindow)
+pygetwindow>=0.0.9; sys_platform == 'win32'
+pywin32>=306; sys_platform == 'win32'
+
+# Linux (уже в системе, но на всякий случай)
+# python3-tk - устанавливается через apt
