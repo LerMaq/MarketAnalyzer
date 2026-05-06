@@ -15,6 +15,46 @@
           @blur="isFocused = false"
           :disabled="isLoading"
         />
+
+        <div
+          ref="reviewSelectRef"
+          class="review-select"
+          :class="{ open: isReviewMenuOpen, disabled: !canChooseReviewCount }"
+        >
+          <button
+            type="button"
+            class="review-trigger"
+            :disabled="isLoading"
+            @click="toggleReviewMenu"
+            :title="canChooseReviewCount ? 'Количество отзывов для анализа' : 'Доступно только с Premium'"
+          >
+            <span class="review-trigger-label">Отзывов</span>
+            <span class="review-trigger-value">{{ reviewCount }}</span>
+            <svg class="chevron" :class="{ rotated: isReviewMenuOpen }" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <Transition name="review-menu">
+            <ul v-if="isReviewMenuOpen && canChooseReviewCount" class="review-menu">
+              <li
+                v-for="opt in REVIEW_OPTIONS"
+                :key="opt"
+                class="review-option"
+                :class="{ active: opt === reviewCount }"
+                @click="selectReviewCount(opt)"
+              >
+                <span>{{ opt }}</span>
+                <span v-if="opt === reviewCount" class="review-check">✓</span>
+              </li>
+            </ul>
+          </Transition>
+          <Transition name="review-menu">
+            <div v-if="showPremiumHint" class="review-tooltip">
+              Доступно только с подпиской Premium
+            </div>
+          </Transition>
+        </div>
+
         <button @click="handleSearch" :disabled="isLoading">
           <span v-if="!isLoading">Анализировать</span>
           <span v-else class="mini-spinner"></span>
@@ -88,6 +128,7 @@
           <div class="version-info">
             <span class="date">{{ new Date(v.date_added).toLocaleDateString() }}</span>
             <span class="time">{{ new Date(v.date_added).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
+            <span class="version-meta">{{ v.review_count ?? 0 }} отзывов</span>
           </div>
           <button @click="$router.push(`/product/${v.ozon_id}/${v.id}`)" class="open-btn">
             Открыть отчет
@@ -163,7 +204,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import api from '../api/client'
 import auth from '../auth'
 import { addTask, tasks as backgroundTasks } from '../analysisTracker'
@@ -181,6 +222,53 @@ const isTopProductsLoading = ref(true)
 const showLoginPrompt = ref(false)
 const errorMessage = ref('')
 const isBackground = ref(false)
+
+const REVIEW_OPTIONS = [50, 100, 150, 200]
+const reviewCount = ref(50)
+const isReviewMenuOpen = ref(false)
+const showPremiumHint = ref(false)
+let premiumHintTimer = null
+const reviewSelectRef = ref(null)
+
+const handleClickOutside = (event) => {
+  if (reviewSelectRef.value && !reviewSelectRef.value.contains(event.target)) {
+    isReviewMenuOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
+const canChooseReviewCount = computed(() => {
+  return auth.user.value?.permissions?.includes('task.priority_queue') || false
+})
+
+const toggleReviewMenu = () => {
+  if (!canChooseReviewCount.value) {
+    isReviewMenuOpen.value = false
+    showPremiumHint.value = true
+    if (premiumHintTimer) clearTimeout(premiumHintTimer)
+    premiumHintTimer = setTimeout(() => {
+      showPremiumHint.value = false
+    }, 2200)
+    return
+  }
+  isReviewMenuOpen.value = !isReviewMenuOpen.value
+}
+
+const selectReviewCount = (value) => {
+  reviewCount.value = value
+  isReviewMenuOpen.value = false
+}
+
+watch(canChooseReviewCount, (val) => {
+  if (!val) reviewCount.value = 50
+})
 
 const scoreClass = (score) => {
   if (score >= 7) return 'score-good'
@@ -311,7 +399,8 @@ const handleSearch = async () => {
 const startNewTask = async () => {
   try {
     const res = await api.post('/tasks/add', {
-      url_or_id: urlOrQuery.value
+      url_or_id: urlOrQuery.value,
+      review_count: canChooseReviewCount.value ? reviewCount.value : 50
     });
     const newTaskId = res.data.task_id;
     const status = res.data.status;
@@ -447,8 +536,144 @@ const restoreAnalysis = () => {
 .search-box button:hover { background: #0046d5; }
 .search-box button:disabled { background: #ccc; }
 
+/* Кастомный селектор количества отзывов */
+.review-select {
+  position: relative;
+  flex-shrink: 0;
+}
+
+button.review-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 14px;
+  border: 1px solid #e2e4ea;
+  border-radius: 12px;
+  background-color: #f3f4f7; /* Same as disabled state */
+  color: #1a1a1a; /* Darker text for contrast */
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.review-select .review-trigger:hover {
+  border-color: #d0d5dd;
+  background-color: #e8ebf0; /* Slightly darker on hover */
+}
+
+.review-select.disabled .review-trigger {
+  background: #f3f4f7;
+  color: #8a8f9c;
+  border-color: #e2e4ea;
+  cursor: not-allowed;
+}
+
+.review-trigger-label {
+  font-size: 0.78rem;
+  color: #666; /* Darker gray for better contrast */
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.review-select.disabled .review-trigger-label {
+  color: #9aa1ae;
+}
+
+.review-trigger-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: inherit;
+  min-width: 28px;
+  text-align: center;
+}
+
+.review-select.disabled .review-trigger-value {
+  color: #8a8f9c;
+}
+
+.chevron {
+  color: #5a6b8a;
+  transition: transform 0.2s ease;
+}
+
+.chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.review-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 140px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 91, 255, 0.18);
+  border: 1px solid #eef0f6;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  z-index: 20;
+}
+
+.review-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-size: 0.95rem;
+}
+
+.review-option:hover {
+  background: #f0f6ff;
+  color: #005bff;
+}
+
+.review-option.active {
+  background: linear-gradient(135deg, #ecf2ff, #dde7ff);
+  color: #005bff;
+}
+
+.review-check {
+  color: #005bff;
+  font-weight: 700;
+}
+
+.review-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  z-index: 20;
+}
+
+.review-menu-enter-active,
+.review-menu-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.review-menu-enter-from,
+.review-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 /* Адаптивность для search-box */
-@media (max-width: 480px) {
+@media (max-width: 580px) {
   .search-box {
     flex-direction: column;
   }
@@ -456,6 +681,16 @@ const restoreAnalysis = () => {
   .search-box button {
     width: 100%;
     padding: 12px;
+  }
+
+  .review-select {
+    width: 100%;
+  }
+
+  .review-trigger {
+    width: 100%;
+    justify-content: space-between;
+    padding: 12px 14px;
   }
 }
 
@@ -564,10 +799,15 @@ const restoreAnalysis = () => {
 .version-info {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 .date { font-weight: 700; color: #1a1a1a; }
 .time { font-size: 0.9rem; color: #888; }
+.version-meta {
+  font-size: 0.85rem;
+  color: #5a6b8a;
+}
 
 .open-btn {
   padding: 10px;

@@ -163,7 +163,7 @@ PERMISSIONS = [
     ("ai_api_key.use", "Использование собственных API ключей для нейросетей"),
     ("ai.manage_keys", "Управление системными API ключами ИИ"),
     ("admin.panel", "Доступ к админ-панели"),
-    ("task.worker", "Функционал воркера"),
+    ("worker.manage", "Управление воркерами"),
     ("top.moderate", "Редактирование подборок"),
     ("user.manage", "Управление пользователями"),
 ]
@@ -172,9 +172,8 @@ RANKS = [
     {"name": "free", "level": 10, "analysis": 5, "chat": 15, "perms": ["task.analysis", "chat.ask", "ai_api_key.use"]},
     {"name": "premium", "level": 20, "analysis": 10, "chat": 100,
      "perms": ["task.analysis", "task.priority_queue", "chat.ask", "ai_api_key.use"]},
-    {"name": "worker", "level": 30, "analysis": None, "chat": 50, "perms": ["task.worker", "chat.ask"]},
     {"name": "moderator", "level": 40, "analysis": None, "chat": None,
-     "perms": ["top.moderate", "user.manage", "chat.ask"]},
+     "perms": ["top.moderate", "user.manage", "worker.manage", "chat.ask"]},
     {"name": "admin", "level": 100, "analysis": 99999, "chat": 99999, "perms": "ALL"},
 ]
 

@@ -43,6 +43,7 @@ class SProductVersion(BaseModel):
     """Краткая информация о версии товара"""
     id: int
     date_added: datetime
+    review_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 

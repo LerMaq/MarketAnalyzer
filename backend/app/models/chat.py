@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
-from sqlalchemy import ForeignKey, Text, String
+from sqlalchemy import ForeignKey, Text, String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -16,7 +16,9 @@ class Chat(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(255), default="Новый диалог")
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
     messages: Mapped[List["ChatMessage"]] = relationship(
         back_populates="chat", cascade="all, delete-orphan", order_by="ChatMessage.created_at"
@@ -33,7 +35,9 @@ class ChatMessage(Base):
     chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"))
     message_text: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(default="user") # "user", "assistant", "system"
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
     chat: Mapped["Chat"] = relationship(back_populates="messages")
 

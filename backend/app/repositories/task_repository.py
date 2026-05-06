@@ -10,8 +10,15 @@ class TaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, ozon_id: int, user_id: int) -> Task:
-        new_task = Task(ozon_id=ozon_id, user_id=user_id, status=TaskStatus.pending)
+    async def create(
+        self, ozon_id: int, user_id: int, review_count: int = 50
+    ) -> Task:
+        new_task = Task(
+            ozon_id=ozon_id,
+            user_id=user_id,
+            review_count=review_count,
+            status=TaskStatus.pending,
+        )
         self.db.add(new_task)
         await self.db.commit()
         await self.db.refresh(new_task)
@@ -90,11 +97,11 @@ class TaskRepository:
         await self.db.commit()
 
     async def get_stale_fetching_tasks(self, stale_seconds: int = 80) -> List[Task]:
-        """Возвращает задачи в статусе fetching, у которых updated_at старше stale_seconds секунд."""
-        threshold = func.now() - timedelta(seconds=stale_seconds)
+        """Возвращает задачи в статусе fetching, у которых обновление старше базового порога + 0.3 с на отзыв свыше 50."""
+        extra_seconds = func.greatest(Task.review_count - 50, 0) * 0.3
         query = select(Task).where(
             Task.status == TaskStatus.fetching,
-            Task.updated_at < threshold,
+            func.extract('epoch', func.now() - Task.updated_at) > stale_seconds + extra_seconds,
         )
         result = await self.db.execute(query)
         return list(result.scalars().all())

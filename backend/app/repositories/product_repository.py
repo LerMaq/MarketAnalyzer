@@ -40,6 +40,23 @@ class ProductRepository:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def get_latest_task_review_counts(self, product_ids: list[int]) -> dict[int, int]:
+        if not product_ids:
+            return {}
+
+        query = (
+            select(Task.product_id, Task.review_count)
+            .where(Task.product_id.in_(product_ids))
+            .order_by(Task.product_id, Task.created_at.desc())
+        )
+        result = await self.db.execute(query)
+
+        counts: dict[int, int] = {}
+        for product_id, review_count in result:
+            if product_id not in counts:
+                counts[product_id] = review_count
+        return counts
+
     async def get_full_by_id(self, product_id: int) -> Optional[Product]:
         query = (
             select(Product)

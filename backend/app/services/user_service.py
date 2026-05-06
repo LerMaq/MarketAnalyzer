@@ -2,7 +2,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 
-from datetime import datetime
+from datetime import datetime, timezone
 from app.repositories.user_repository import UserRepository
 from app.models.user import User
 from app.schemas.user import SUserFullProfile, SSimpleMessage, SUserLimits, SUserUsage
@@ -14,8 +14,8 @@ class UserService:
         self.repo = UserRepository(db)
 
     def _get_tariff(self, user: User) -> str:
-        # expires_at хранится как naive (TIMESTAMP WITHOUT TIME ZONE)
-        now = datetime.now()
+        # Используем timezone-aware now для корректного сравнения
+        now = datetime.now(timezone.utc)
         rank_names = {
             ur.rank.name for ur in user.user_ranks
             if ur.rank and (ur.expires_at is None or ur.expires_at > now)

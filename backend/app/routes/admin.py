@@ -12,6 +12,7 @@ from app.schemas.metric import SMetric, SProductMetric
 from app.schemas.ai_config import SSystemAiKeyCreate
 from app.services.ai_service import AIService
 from app.repositories.user_repository import UserRepository
+from app.repositories.worker_repository import WorkerRepository
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -22,6 +23,21 @@ def require_admin_permission(user: Optional[User]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Требуются права администратора"
+        )
+
+
+def require_worker_management_permission(user: Optional[User]):
+    """Доступ к управлению воркерами (admin.panel или worker.manage)."""
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Требуется авторизация",
+        )
+    perms = user.active_permissions
+    if "admin.panel" not in perms and "worker.manage" not in perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для управления воркерами",
         )
 
 
@@ -331,55 +347,107 @@ async def remove_rank_from_user(
     return {"user_id": user_id, "rank": rank_name, "removed": True}
 
 
-@router.post("/users/worker")
+# ========== WORKERS ==========
+
+
+def _serialize_worker(worker) -> dict:
+    return {
+        "id": worker.id,
+        "name": worker.name,
+        "token": worker.token,
+        "is_active": worker.is_active,
+        "created_at": worker.created_at,
+        "created_by_user_id": worker.created_by_user_id,
+    }
+
+
+@router.get("/workers")
+async def list_workers(
+    user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Список всех воркеров."""
+    require_worker_management_permission(user)
+    repo = WorkerRepository(db)
+    workers = await repo.list_all()
+    return [_serialize_worker(w) for w in workers]
+
+
+@router.post("/workers")
 async def create_worker(
     payload: dict,
     user: Optional[User] = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """Создать нового пользователя с ролью worker.
+    """Создать нового воркера. Ожидает {name}."""
+    require_worker_management_permission(user)
 
-    Ожидает JSON тело: { "email": "...", "password": "...", "name": "..." }.
-    """
-    require_admin_permission(user)
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Поле name обязательно")
 
-    email = payload.get("email")
-    password = payload.get("password")
+    repo = WorkerRepository(db)
+    worker = await repo.create(name=name, created_by_user_id=user.id)
+    return _serialize_worker(worker)
+
+
+@router.post("/workers/{worker_id}/regenerate")
+async def regenerate_worker_token(
+    worker_id: int,
+    user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Сгенерировать новый токен для воркера."""
+    require_worker_management_permission(user)
+
+    repo = WorkerRepository(db)
+    worker = await repo.regenerate_token(worker_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Воркер не найден")
+    return _serialize_worker(worker)
+
+
+@router.patch("/workers/{worker_id}")
+async def update_worker(
+    worker_id: int,
+    payload: dict,
+    user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Обновить воркера (name и/или is_active)."""
+    require_worker_management_permission(user)
+
     name = payload.get("name")
+    if name is not None:
+        name = str(name).strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Поле name не может быть пустым")
 
-    if not email or not password or not name:
-        raise HTTPException(
-            status_code=400,
-            detail="Поля email, password и name обязательны"
-        )
-    
-    from app.services.user_service import UserService
-    from app.auth.security import hash_password
+    is_active = payload.get("is_active")
+    if is_active is not None and not isinstance(is_active, bool):
+        raise HTTPException(status_code=400, detail="Поле is_active должно быть bool")
 
-    service = UserService(db)
-    
-    # Проверяем, не существует ли уже пользователь с таким email
-    existing = await service.repo.get_by_email(email)
-    if existing:
-        raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
-    
-    # Создаем пользователя
-    hashed_password = hash_password(password)
-    new_user = await service.repo.create_user({
-        "email": email,
-        "name": name,
-        "password": hashed_password
-    })
-    
-    # Назначаем ранг worker
-    await service.repo.assign_rank(new_user.id, "worker")
-    
-    return {
-        "id": new_user.id,
-        "email": new_user.email,
-        "name": new_user.name,
-        "role": "worker"
-    }
+    repo = WorkerRepository(db)
+    worker = await repo.update_fields(worker_id, name=name, is_active=is_active)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Воркер не найден")
+    return _serialize_worker(worker)
+
+
+@router.delete("/workers/{worker_id}")
+async def delete_worker(
+    worker_id: int,
+    user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Удалить воркера."""
+    require_worker_management_permission(user)
+
+    repo = WorkerRepository(db)
+    deleted = await repo.delete(worker_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Воркер не найден")
+    return {"id": worker_id, "deleted": True}
 
 
 # ========== AI CONFIGS ==========

@@ -30,8 +30,8 @@
       <router-link to="/tariffs" class="link-tariffs">Сменить тариф →</router-link>
     </section>
 
-    <!-- Админ-панель (только для администраторов) -->
-    <AdminPanel v-if="isAdmin" />
+    <!-- Админ-панель (для админов и модераторов с правом worker.manage) -->
+    <AdminPanel v-if="canSeeAdminPanel" :permissions="profile?.permissions || []" />
 
     <section class="card">
       <h3>Основные данные</h3>
@@ -135,15 +135,17 @@ const isLoading = ref(true)
 const showOldPassword = ref(false)
 const showNewPassword = ref(false)
 const showDeleteModal = ref(false)
-const isAdmin = ref(false)
+
+const canSeeAdminPanel = computed(() => {
+  const perms = profile.value?.permissions || []
+  return perms.includes('admin.panel') || perms.includes('worker.manage')
+})
 
 const loadProfile = async () => {
   try {
     const res = await api.get('/user/me')
     profile.value = res.data
     name.value = res.data.name || ''
-    // Проверяем права администратора на основе permissions из ответа
-    isAdmin.value = res.data.permissions?.includes('admin.panel') || false
   } catch (e) {
     console.error('Ошибка загрузки профиля', e)
   }

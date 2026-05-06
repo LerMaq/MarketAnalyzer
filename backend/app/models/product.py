@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import ForeignKey, Text, Boolean, BigInteger
+from sqlalchemy import ForeignKey, Text, Boolean, BigInteger, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -13,7 +13,7 @@ class Product(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     raw_content: Mapped[Optional[str]] = mapped_column(Text)
     ozon_id: Mapped[int] = mapped_column(BigInteger) # Убрано unique=True
-    date_added: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    date_added: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     price: Mapped[Optional[float]] = mapped_column()
 
     reviews: Mapped[List["Review"]] = relationship(cascade="all, delete-orphan", back_populates="product")
@@ -32,7 +32,7 @@ class Review(Base):
     text: Mapped[str] = mapped_column(Text)
     rating: Mapped[int]
     author_name: Mapped[str]
-    review_date: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    review_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     product: Mapped["Product"] = relationship(back_populates="reviews")
 

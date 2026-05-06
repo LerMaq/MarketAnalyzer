@@ -5,8 +5,15 @@ import asyncio
 from app.repositories import TaskRepository, UserRepository
 from app.utils import extract_ozon_id
 from app.models.user import User
+from app.models.worker import Worker
 from app.models.task import TaskStatus
-from app.schemas.task import STask, STaskAddedResponse, STaskWorkerTake, STaskWorkerData
+from app.schemas.task import (
+    ALLOWED_REVIEW_COUNTS,
+    STask,
+    STaskAddedResponse,
+    STaskWorkerTake,
+    STaskWorkerData,
+)
 
 from .ai_service import AIService
 from .product_service import ProductService
@@ -19,11 +26,25 @@ class TaskService:
         self.user_repo = UserRepository(db)
         self.db = db
 
-    async def add_new_task(self, url_or_id: str, user: Optional[User]) -> STaskAddedResponse:
+    async def add_new_task(
+        self,
+        url_or_id: str,
+        user: Optional[User],
+        review_count: int = 50,
+    ) -> STaskAddedResponse:
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
         if "task.analysis" not in user.active_permissions:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для запуска анализа")
+
+        if review_count not in ALLOWED_REVIEW_COUNTS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"review_count должен быть одним из {ALLOWED_REVIEW_COUNTS}",
+            )
+
+        if review_count != 50 and "task.priority_queue" not in user.active_permissions:
+            review_count = 50
 
         usage = await self.user_repo.get_or_create_today_usage(user.id)
         max_limit = user.daily_limits.get("analysis", 0)
@@ -43,25 +64,30 @@ class TaskService:
         if existing:
             return STaskAddedResponse(status=existing.status, task_id=existing.id)
 
-        task = await self.task_repo.create(ozon_id, user_id=user.id)
+        task = await self.task_repo.create(
+            ozon_id, user_id=user.id, review_count=review_count
+        )
         await self.user_repo.increment_usage(user.id, analysis=True)
 
         return STaskAddedResponse(status=task.status, task_id=task.id)
 
-    async def verify_worker_access(self, user: Optional[User]):
-        """Вспомогательный метод для проверки прав воркера"""
-        if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
-        if "task.worker" not in user.active_permissions:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ только для воркеров")
-
-    async def take_task_for_worker(self, user: Optional[User]) -> Optional[STaskWorkerTake]:
-        await self.verify_worker_access(user)
+    async def take_task_for_worker(
+        self, worker: Optional[Worker]
+    ) -> Optional[STaskWorkerTake]:
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный или неактивный X-Worker-Token",
+            )
 
         # 1. Первая быстрая проверка (без ожидания)
-        task = await self.task_repo.get_next_pending_and_assign(user.id)
+        task = await self.task_repo.get_next_pending_and_assign(worker.id)
         if task:
-            return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+            return STaskWorkerTake(
+                task_id=task.id,
+                ozon_id=task.ozon_id,
+                review_count=task.review_count,
+            )
 
         # 2. Если пусто — создаем отдельное соединение для ожидания
         # Используем raw_connection из того же движка, но не через сессию
@@ -80,15 +106,25 @@ class TaskService:
 
             try:
                 # Сразу после подписки проверяем ЕЩЕ РАЗ (чтобы не проспать задачу)
-                task = await self.task_repo.get_next_pending_and_assign(user.id)
-                if task: return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+                task = await self.task_repo.get_next_pending_and_assign(worker.id)
+                if task:
+                    return STaskWorkerTake(
+                        task_id=task.id,
+                        ozon_id=task.ozon_id,
+                        review_count=task.review_count,
+                    )
 
                 # Ждем уведомления ровно 25 секунд
                 try:
                     await asyncio.wait_for(queue.get(), timeout=25.0)
                     # Как только "пинг" пришел — возвращаемся в основную сессию за задачей
-                    task = await self.task_repo.get_next_pending_and_assign(user.id)
-                    if task: return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+                    task = await self.task_repo.get_next_pending_and_assign(worker.id)
+                    if task:
+                        return STaskWorkerTake(
+                            task_id=task.id,
+                            ozon_id=task.ozon_id,
+                            review_count=task.review_count,
+                        )
                 except asyncio.TimeoutError:
                     return None  # Выходим по тайм-ауту, воркер перезайдет
             finally:
@@ -103,9 +139,19 @@ class TaskService:
         return STask.model_validate(task)
 
     async def process_worker_complete(
-        self, task_id: int, worker_data: STaskWorkerData, background_tasks, worker: User
+        self,
+        task_id: int,
+        worker_data: STaskWorkerData,
+        background_tasks,
+        worker: Optional[Worker],
     ) -> dict:
         """Проверить raw_content, обработать повторную попытку/сбой или добавить анализ ИИ в очередь."""
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный или неактивный X-Worker-Token",
+            )
+
         task = await self.task_repo.get_by_id(task_id)
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")

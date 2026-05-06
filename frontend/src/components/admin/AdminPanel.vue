@@ -4,26 +4,37 @@
     
     <!-- Вкладки -->
     <div class="tabs">
-      <button 
-        class="tab-btn" 
+      <button
+        v-if="canSeeAll"
+        class="tab-btn"
         :class="{ active: activeTab === 'metrics' }"
         @click="activeTab = 'metrics'"
       >
         Метрики
       </button>
-      <button 
-        class="tab-btn" 
+      <button
+        v-if="canSeeAll"
+        class="tab-btn"
         :class="{ active: activeTab === 'users' }"
         @click="activeTab = 'users'"
       >
         Пользователи
       </button>
-      <button 
-        class="tab-btn" 
+      <button
+        v-if="canSeeAll"
+        class="tab-btn"
         :class="{ active: activeTab === 'ai' }"
         @click="activeTab = 'ai'"
       >
         Настройки ИИ
+      </button>
+      <button
+        v-if="canManageWorkers"
+        class="tab-btn"
+        :class="{ active: activeTab === 'workers' }"
+        @click="activeTab = 'workers'"
+      >
+        Воркеры
       </button>
     </div>
 
@@ -117,17 +128,6 @@
     <div v-else-if="activeTab === 'users'" class="tab-content">
       <div class="admin-actions">
         <button @click="loadUsers" class="refresh-btn">Обновить</button>
-      </div>
-
-      <!-- Форма создания воркера -->
-      <div class="create-worker-form">
-        <h4>Создать воркера</h4>
-        <div class="form-row">
-          <input v-model="newWorkerForm.email" type="email" placeholder="Email" class="form-input" />
-          <input v-model="newWorkerForm.password" type="password" placeholder="Пароль" class="form-input" />
-          <input v-model="newWorkerForm.name" type="text" placeholder="Имя" class="form-input" />
-          <button @click="createWorker" class="add-btn">Создать</button>
-        </div>
       </div>
 
       <!-- Поиск пользователей -->
@@ -538,15 +538,151 @@
         </div>
       </div>
     </div>
+
+    <!-- Содержимое вкладки Воркеры -->
+    <div v-else-if="activeTab === 'workers'" class="tab-content">
+      <div class="admin-actions">
+        <button @click="loadWorkers" class="refresh-btn">Обновить</button>
+      </div>
+
+      <div class="create-worker-form">
+        <h4>Создать воркера</h4>
+        <div class="form-row">
+          <input
+            v-model="newWorkerName"
+            type="text"
+            placeholder="Имя воркера (метка для админа)"
+            class="form-input"
+            @keyup.enter="createWorker"
+          />
+          <button @click="createWorker" class="add-btn">Создать</button>
+        </div>
+        <p class="hint">Токен будет сгенерирован автоматически. Скопируйте его и передайте скраперу — воркер использует его в заголовке <code>X-Worker-Token</code>.</p>
+      </div>
+
+      <div v-if="canSeeAll" class="filter-section">
+        <label for="user-filter">Показать воркеров пользователя:</label>
+        <select id="user-filter" v-model="selectedUserFilter" class="form-select">
+          <option value="">Все пользователи</option>
+          <option
+            v-for="option in userFilterOptions"
+            :key="option.id"
+            :value="option.id"
+            :class="{ 'self-option': option.isSelf }"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+
+      <div v-if="workers.length === 0" class="no-data">
+        Нет воркеров
+      </div>
+
+      <div v-else class="workers-grid">
+        <div
+          v-for="worker in filteredWorkers"
+          :key="worker.id"
+          class="worker-card"
+          :class="{ inactive: !worker.is_active }"
+        >
+          <div class="worker-card-head">
+            <div class="worker-name-block">
+              <input
+                v-if="editingWorkerId === worker.id"
+                v-model="editWorkerForm.name"
+                type="text"
+                class="form-input worker-name-input"
+                @keyup.enter="saveWorkerName(worker.id)"
+              />
+              <span v-else class="worker-name">{{ worker.name }}</span>
+              <span class="worker-id">#{{ worker.id }}</span>
+            </div>
+            <div class="worker-card-actions">
+              <template v-if="editingWorkerId === worker.id">
+                <button class="save-btn" @click="saveWorkerName(worker.id)">✓</button>
+                <button class="cancel-btn" @click="cancelEditWorker">✗</button>
+              </template>
+              <template v-else>
+                <button class="edit-btn small" @click="startEditWorker(worker)" title="Переименовать">✎</button>
+                <label class="toggle-switch" :title="worker.is_active ? 'Активен' : 'Отключён'">
+                  <input
+                    type="checkbox"
+                    :checked="worker.is_active"
+                    @change="toggleWorkerActive(worker)"
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+                <button class="delete-btn small" @click="deleteWorker(worker.id)" title="Удалить воркера">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" aria-hidden="true">
+                    <path d="M123.2 510.55C105.11 506.17 91.63 490.76 89.07 471.5 88.48 467.1 86.43 444.15 84.5 420.5 76.32 319.81 61.96 147.64 61.74 147.53 61.61 147.47 59.04 146.31 56.04 144.96 39.8 137.65 29.07 117.65 31.67 99.58 34.54 79.64 49.4 64.12 68.61 60.98 71.85 60.45 91.71 60.01 112.75 60.01L151 60v-8.86c0-4.88.46-11.29 1.02-14.25C155.43 18.93 169.93 4.43 187.89 1.02 195.14-.35 316.86-.35 324.11 1.02 342.07 4.43 356.57 18.93 359.98 36.89c.56 2.96 1.02 9.37 1.02 14.25V60h38.25c21.04 0 40.9.44 44.14.97 19.21 3.14 34.07 18.66 36.94 38.6 2.6 18.07-7.39 36.87-24.07 45.3l-6.05 3.06-.63 5.78C448.99 159.14 435.26 325 427.5 420.5c-1.93 23.65-3.98 46.6-4.57 51-2.64 19.79-16.88 35.5-35.73 39.4-8.2 1.7-256.91 1.36-264 -.35zM386.68 479.4c6.73-5.02 5.25-9.18 27.79-275.36 2.47-30.25 4.68-56.69 4.92-58.75l.42-3.75H92.19v3.75c.24 2.06 2.45 28.5 4.92 58.75 16.24 198.89 21.45 258.56 22.82 261.22 1.76 3.4 4.38 5.85 7.67 7.17 1.61.65 47.98.93 130.16.8l126.67-.19zm56.72-361.67c10.05-5.76 9.83-19.86-.4-25.61L439.23 90H72.77L69 92.12c-10.23 5.75-10.45 19.85-.4 25.61L72.5 119.97 256 119.97 439.5 119.97 443.4 117.73zM331 51.52c0-11.11-1.81-15.74-7.46-19.05L319.32 30 256 30l-63.32 0-4.22 2.47C182.81 35.78 181 40.41 181 51.52V60h150v-8.48z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </template>
+            </div>
+          </div>
+
+          <div class="worker-token-row">
+            <span class="worker-token-label">Token</span>
+            <code class="worker-token-value">{{ revealedTokens[worker.id] ? worker.token : maskToken(worker.token) }}</code>
+            <button class="icon-btn" @click="toggleTokenVisibility(worker.id)" :title="revealedTokens[worker.id] ? 'Скрыть' : 'Показать'">
+              {{ revealedTokens[worker.id] ? '🙈' : '👁' }}
+            </button>
+            <button class="icon-btn" @click="copyToken(worker)" title="Скопировать токен">📋</button>
+            <button class="icon-btn warn" @click="regenerateToken(worker)" title="Сгенерировать новый токен">⟳</button>
+          </div>
+
+          <div class="worker-meta">
+            <span class="meta-item">Создан: {{ formatDateTime(worker.created_at) }}</span>
+            <span class="meta-item" v-if="worker.created_by_user_id">Автор: {{ getUserName(worker.created_by_user_id) }} ({{ worker.created_by_user_id }})</span>
+            <span class="meta-status" :class="{ on: worker.is_active, off: !worker.is_active }">
+              {{ worker.is_active ? 'Активен' : 'Отключён' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <Transition name="fade">
+        <div v-if="newTokenInfo" class="modal-overlay" @click.self="newTokenInfo = null">
+          <div class="modal-content">
+            <button @click="newTokenInfo = null" class="close-modal modal-close-big">&times;</button>
+            <header class="modal-header">
+              <h3>Воркер «{{ newTokenInfo.name }}» создан</h3>
+            </header>
+            <div class="modal-body">
+              <p>Скопируйте токен сейчас — позже его всегда можно подсмотреть в карточке воркера.</p>
+              <code class="new-token-display">{{ newTokenInfo.token }}</code>
+              <div class="modal-actions">
+                <button class="btn-secondary" @click="newTokenInfo = null">Закрыть</button>
+                <button class="btn-primary" @click="copyToken(newTokenInfo)">Скопировать</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </div>
   </section>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import api from '@/api/client'
 import auth from '@/auth'
 
-const activeTab = ref('metrics')
+const props = defineProps({
+  permissions: {
+    type: Array,
+    default: () => []
+  }
+})
+
+const canSeeAll = computed(() => props.permissions.includes('admin.panel'))
+const canManageWorkers = computed(() =>
+  props.permissions.includes('admin.panel') ||
+  props.permissions.includes('worker.manage')
+)
+
+const activeTab = ref(canSeeAll.value ? 'metrics' : 'workers')
 const isLoading = ref(false)
 const error = ref(null)
 
@@ -564,11 +700,14 @@ const selectedUserRanks = ref(null) // null = не выбран, [] = выбра
 const selectedUserStats = ref(null) // { analysis: 0, chat: 0 }
 const selectedUserName = ref('')
 const newRankName = ref('')
-const newWorkerForm = ref({
-  email: '',
-  password: '',
-  name: ''
-})
+
+// Данные воркеров
+const workers = ref([])
+const newWorkerName = ref('')
+const newTokenInfo = ref(null)
+const revealedTokens = ref({})
+const editingWorkerId = ref(null)
+const editWorkerForm = ref({ name: '' })
 
 // Данные ИИ
 const aiConfigs = ref([])
@@ -730,28 +869,187 @@ const removeRank = async (rankName) => {
   }
 }
 
-// Создание воркера
+// === Управление воркерами ===
+const loadWorkers = async () => {
+  try {
+    isLoading.value = true
+    error.value = null
+    const res = await api.get('/admin/workers')
+    workers.value = res.data
+  } catch (e) {
+    console.error('Ошибка загрузки воркеров', e)
+    error.value = e.response?.data?.detail || 'Ошибка загрузки воркеров'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Получение имени пользователя по ID
+const getUserName = (userId) => {
+  if (!userId) return 'Неизвестный'
+  const user = users.value.find(u => u.id === userId)
+  return user ? user.name : `Пользователь #${userId}`
+}
+
+// Фильтр воркеров по пользователю (для админов)
+const selectedUserFilter = ref('')
+
+// Отфильтрованные воркеры
+const filteredWorkers = computed(() => {
+  if (!canSeeAll.value) {
+    // Модераторы видят только свои воркеры
+    return workers.value.filter(w => w.created_by_user_id === currentUserId.value)
+  }
+  // Админы видят все или отфильтрованные
+  if (!selectedUserFilter.value) {
+    return workers.value
+  }
+  return workers.value.filter(w => w.created_by_user_id.toString() === selectedUserFilter.value)
+})
+
+// Опции для комбобокса фильтра (только для админов)
+const userFilterOptions = computed(() => {
+  const options = []
+  // Сначала себя
+  const currentUser = users.value.find(u => u.id === currentUserId.value)
+  if (currentUser) {
+    options.push({
+      id: currentUserId.value.toString(),
+      label: `Я (${currentUser.name})`,
+      isSelf: true
+    })
+  }
+  // Затем другие пользователи с воркерами
+  const usersWithWorkers = users.value.filter(u =>
+    u.id !== currentUserId.value && workers.value.some(w => w.created_by_user_id === u.id)
+  )
+  usersWithWorkers.forEach(u => {
+    options.push({
+      id: u.id.toString(),
+      label: `${u.name} (${u.id})`,
+      isSelf: false
+    })
+  })
+  return options
+})
+
 const createWorker = async () => {
-  if (!newWorkerForm.value.email || !newWorkerForm.value.password || !newWorkerForm.value.name) {
-    alert('Заполните все поля')
+  const name = newWorkerName.value.trim()
+  if (!name) {
+    alert('Укажите имя воркера')
     return
   }
-  
   try {
-    await api.post('/admin/users/worker', {
-      email: newWorkerForm.value.email,
-      password: newWorkerForm.value.password,
-      name: newWorkerForm.value.name
-    })
-    newWorkerForm.value = { email: '', password: '', name: '' }
-    await loadUsers()
-    alert('Воркер успешно создан')
+    const res = await api.post('/admin/workers', { name })
+    newWorkerName.value = ''
+    newTokenInfo.value = { name: res.data.name, token: res.data.token }
+    await loadWorkers()
   } catch (e) {
     console.error('Ошибка создания воркера', e)
     const detail = e.response?.data?.detail
     const msg = typeof detail === 'string' ? detail : 'Ошибка'
     alert('Не удалось создать воркера: ' + msg)
   }
+}
+
+const maskToken = (token) => {
+  if (!token) return ''
+  if (token.length <= 8) return '•'.repeat(token.length)
+  return token.slice(0, 4) + '•'.repeat(Math.max(8, token.length - 8)) + token.slice(-4)
+}
+
+const toggleTokenVisibility = (workerId) => {
+  revealedTokens.value = {
+    ...revealedTokens.value,
+    [workerId]: !revealedTokens.value[workerId]
+  }
+}
+
+const copyToken = async (worker) => {
+  try {
+    await navigator.clipboard.writeText(worker.token)
+    pushToast('Токен скопирован')
+  } catch (e) {
+    console.error('Не удалось скопировать токен', e)
+    alert('Не удалось скопировать токен')
+  }
+}
+
+const regenerateToken = async (worker) => {
+  if (!confirm(`Сгенерировать новый токен для «${worker.name}»? Старый перестанет работать.`)) return
+  try {
+    const res = await api.post(`/admin/workers/${worker.id}/regenerate`)
+    const idx = workers.value.findIndex(w => w.id === worker.id)
+    if (idx !== -1) workers.value[idx] = res.data
+    revealedTokens.value = { ...revealedTokens.value, [worker.id]: true }
+    pushToast('Токен обновлён')
+  } catch (e) {
+    console.error('Ошибка регенерации токена', e)
+    alert('Не удалось обновить токен: ' + (e.response?.data?.detail || 'Ошибка'))
+  }
+}
+
+const toggleWorkerActive = async (worker) => {
+  try {
+    const res = await api.patch(`/admin/workers/${worker.id}`, { is_active: !worker.is_active })
+    const idx = workers.value.findIndex(w => w.id === worker.id)
+    if (idx !== -1) workers.value[idx] = res.data
+  } catch (e) {
+    console.error('Ошибка переключения статуса', e)
+    alert('Не удалось переключить статус: ' + (e.response?.data?.detail || 'Ошибка'))
+  }
+}
+
+const startEditWorker = (worker) => {
+  editingWorkerId.value = worker.id
+  editWorkerForm.value = { name: worker.name }
+}
+
+const cancelEditWorker = () => {
+  editingWorkerId.value = null
+  editWorkerForm.value = { name: '' }
+}
+
+const saveWorkerName = async (workerId) => {
+  const name = editWorkerForm.value.name.trim()
+  if (!name) {
+    alert('Имя не может быть пустым')
+    return
+  }
+  try {
+    const res = await api.patch(`/admin/workers/${workerId}`, { name })
+    const idx = workers.value.findIndex(w => w.id === workerId)
+    if (idx !== -1) workers.value[idx] = res.data
+    cancelEditWorker()
+  } catch (e) {
+    console.error('Ошибка переименования воркера', e)
+    alert('Не удалось переименовать: ' + (e.response?.data?.detail || 'Ошибка'))
+  }
+}
+
+const deleteWorker = async (workerId) => {
+  if (!confirm('Удалить этого воркера? Активные задачи продолжат работу до фоновой очистки.')) return
+  try {
+    await api.delete(`/admin/workers/${workerId}`)
+    workers.value = workers.value.filter(w => w.id !== workerId)
+  } catch (e) {
+    console.error('Ошибка удаления воркера', e)
+    alert('Не удалось удалить: ' + (e.response?.data?.detail || 'Ошибка'))
+  }
+}
+
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  return d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+const toastMessage = ref('')
+let toastTimer = null
+const pushToast = (msg) => {
+  toastMessage.value = msg
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastMessage.value = '' }, 1800)
 }
 
 // Загрузка данных ИИ
@@ -1027,6 +1325,8 @@ const retryLoad = () => {
     loadMetrics()
   } else if (activeTab.value === 'users') {
     loadUsers()
+  } else if (activeTab.value === 'workers') {
+    loadWorkers()
   } else {
     loadAiData()
   }
@@ -1041,17 +1341,22 @@ onMounted(async () => {
     console.error('Ошибка получения текущего пользователя', e)
   }
 
-  // При первом открытии панели сразу подгружаем данные для всех вкладок,
+  // При первом открытии панели сразу подгружаем данные доступных вкладок,
   // чтобы не требовать нажатия на "Обновить"
   isLoading.value = true
   error.value = null
   try {
-    await Promise.all([
-      loadMetrics(),
-      loadUsers(),
-      loadAiData(),
-      loadRanks()
-    ])
+    const promises = []
+    if (canSeeAll.value) {
+      promises.push(loadMetrics(), loadAiData(), loadRanks())
+    }
+    if (canSeeAll.value || canManageWorkers.value) {
+      promises.push(loadUsers())
+    }
+    if (canManageWorkers.value) {
+      promises.push(loadWorkers())
+    }
+    await Promise.all(promises)
   } finally {
     isLoading.value = false
   }
@@ -1884,6 +2189,315 @@ input:checked + .toggle-slider:before {
   padding-top: 12px;
   border-top: 1px solid #e0e0e0;
 }
+
+/* === Фильтр воркеров === */
+.filter-section {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-section label {
+  font-weight: 500;
+  color: #555;
+}
+
+.filter-section .form-select {
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  font-size: 0.9em;
+}
+
+.filter-section .form-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.self-option {
+  font-weight: bold;
+  background-color: #f0f8ff;
+}
+
+/* === Воркеры === */
+.workers-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 720px) {
+  .workers-grid {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+}
+
+.worker-card {
+  background: white;
+  border: 1px solid #e6ecf5;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.worker-card:hover {
+  border-color: #c4d4f5;
+  box-shadow: 0 8px 22px rgba(0, 91, 255, 0.08);
+}
+
+.worker-card.inactive {
+  opacity: 0.65;
+  background: #fafbfd;
+}
+
+.worker-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.worker-name-block {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.worker-name {
+  font-weight: 700;
+  color: #1a1a1a;
+  font-size: 1.02rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.worker-id {
+  color: #98a3b8;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.worker-name-input {
+  font-weight: 600;
+  font-size: 1rem;
+  flex: 1;
+}
+
+.worker-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.worker-card-actions .toggle-switch {
+  margin-left: 0;
+}
+
+.worker-token-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f5f8ff;
+  border: 1px solid #e2ebff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  flex-wrap: wrap;
+}
+
+.worker-token-label {
+  font-size: 0.75rem;
+  color: #5a6b8a;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.worker-token-value {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  color: #1a3d8f;
+  word-break: break-all;
+  min-width: 120px;
+}
+
+.icon-btn {
+  background: white;
+  border: 1px solid #d6e0f5;
+  color: #1a3d8f;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  transition: all 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: #ecf2ff;
+  border-color: #b5c8f0;
+}
+
+.icon-btn.warn {
+  color: #b9582a;
+  border-color: #f0d3bd;
+  background: #fff7f0;
+}
+
+.icon-btn.warn:hover {
+  background: #ffe8d6;
+  border-color: #e7b58c;
+}
+
+.worker-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: #6a7689;
+}
+
+.meta-item {
+  white-space: nowrap;
+}
+
+.meta-status {
+  margin-left: auto;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+}
+
+.meta-status.on {
+  color: #0d9e5f;
+  background: #e6f9f0;
+}
+
+.meta-status.off {
+  color: #8a8f9c;
+  background: #eef0f4;
+}
+
+.create-worker-form .hint {
+  margin: 8px 0 0 0;
+  color: #6a7689;
+  font-size: 0.84rem;
+}
+
+.create-worker-form code {
+  background: #eef2ff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  color: #1a3d8f;
+}
+
+.new-token-display {
+  display: block;
+  margin: 12px 0;
+  padding: 12px;
+  background: #f5f8ff;
+  border: 1px solid #d6e0f5;
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88rem;
+  color: #1a3d8f;
+  word-break: break-all;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(20, 28, 50, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 18px;
+  width: 92%;
+  max-width: 460px;
+  padding: 24px;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef0f6;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #1a1a1a;
+}
+
+.modal-close-big {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 26px;
+  color: #8a8f9c;
+  cursor: pointer;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.btn-primary {
+  background: #005bff;
+  color: white;
+  border: none;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover { background: #0046d5; }
+
+.btn-secondary {
+  background: #f0f2f5;
+  color: #333;
+  border: none;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary:hover { background: #e4e6e9; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 
 @keyframes spin {
   100% { transform: rotate(360deg); }

@@ -32,8 +32,15 @@ class ProductService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         products = await self.product_repo.get_all_versions(ozon_id)
 
+        product_ids = [p.id for p in products]
+        review_counts = await self.product_repo.get_latest_task_review_counts(product_ids)
+
         versions = [
-            SProductVersion(id=p.id, date_added=p.date_added)
+            SProductVersion(
+                id=p.id,
+                date_added=p.date_added,
+                review_count=review_counts.get(p.id, 0)
+            )
             for p in products
         ]
 
