@@ -4,6 +4,7 @@ import ProductReportView from '../views/ProductReportView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import TariffsView from '../views/TariffsView.vue'
 import RegisterView from '../views/RegisterView.vue'
+import HistoryView from '../views/HistoryView.vue'
 
 const routes = [
   {
@@ -30,6 +31,11 @@ const routes = [
     path: '/tariffs',
     name: 'tariffs',
     component: TariffsView
+  },
+  {
+    path: '/history',
+    name: 'history',
+    component: HistoryView
   },
   {
     // :article — артикул Ozon, :id — ID записи в БД

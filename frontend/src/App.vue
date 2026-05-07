@@ -12,6 +12,7 @@
       <nav class="nav">
         <template v-if="isAuthenticated">
           <button class="link-btn" @click="$router.push('/tariffs')">Тарифы</button>
+          <button class="link-btn" @click="$router.push('/history')">История</button>
           <button class="link-btn" @click="$router.push('/profile')">Профиль</button>
           <button class="link-btn" @click="logout">Выйти</button>
         </template>
@@ -38,6 +39,7 @@
     <nav class="mobile-nav" :class="{ active: isMobileMenuOpen }">
       <template v-if="isAuthenticated">
         <button class="link-btn" @click="navigateTo('/tariffs'); toggleMobileMenu()">Тарифы</button>
+        <button class="link-btn" @click="navigateTo('/history'); toggleMobileMenu()">История</button>
         <button class="link-btn" @click="navigateTo('/profile'); toggleMobileMenu()">Профиль</button>
         <button class="link-btn" @click="logoutAndCloseMenu">Выйти</button>
       </template>

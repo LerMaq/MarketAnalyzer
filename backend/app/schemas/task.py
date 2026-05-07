@@ -14,6 +14,9 @@ class STask(BaseModel):
     user_id: int
     retry_count: int = 0
     review_count: int = 50
+    product_name: Optional[str] = None
+    product_price: Optional[float] = None
+    product_score: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

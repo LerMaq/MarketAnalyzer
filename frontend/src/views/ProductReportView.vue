@@ -8,7 +8,7 @@
     <div v-if="product" class="report-container fade-in">
       <header class="report-header">
         <div class="header-row buttons-row">
-          <button @click="$router.push('/')" class="back-btn">← К поиску</button>
+          <button @click="goBack" class="back-btn">← Назад</button>
           <button 
             v-if="isAdmin" 
             @click="confirmDeleteReport" 
@@ -295,11 +295,13 @@
 
 <script setup>
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../api/client'
 import auth from '../auth'
 import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({ breaks: true, linkify: true })
+const router = useRouter()
 const props = defineProps(['article', 'id'])
 const product = ref(null)
 const isLoading = ref(true)
@@ -437,6 +439,16 @@ const startNewChat = () => {
   messages.value = []
   isChatsMenuOpen.value = false
   chatError.value = ''
+}
+
+const goBack = () => {
+  // Проверяем, есть ли история навигации
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    // Если истории нет, переходим на главную
+    router.push('/')
+  }
 }
 
 onMounted(async () => {

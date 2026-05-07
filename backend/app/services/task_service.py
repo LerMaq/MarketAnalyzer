@@ -212,7 +212,43 @@ class TaskService:
 
     async def get_user_tasks(self, user_id: int) -> List[STask]:
         tasks = await self.task_repo.get_by_user_id(user_id)
-        return [STask.model_validate(task) for task in tasks]
+        result = []
+        
+        for task in tasks:
+            task_dict = {
+                "id": task.id,
+                "ozon_id": task.ozon_id,
+                "status": task.status,
+                "product_id": task.product_id,
+                "user_id": task.user_id,
+                "retry_count": task.retry_count,
+                "review_count": task.review_count,
+                "product_name": None,
+                "product_price": None,
+                "product_score": None,
+            }
+            
+            # Если есть связанный продукт, загружаем его данные напрямую из репозитория
+            if task.product_id:
+                from app.repositories import ProductRepository
+                product_repo = ProductRepository(self.db)
+                try:
+                    # Загружаем продукт с его метриками для расчёта score
+                    product = await product_repo.get_by_product_id_full(task.product_id)
+                    if product:
+                        task_dict["product_name"] = product.name
+                        task_dict["product_price"] = product.price
+                        # Вычисляем score из метрик
+                        if product.product_metrics:
+                            total_score = sum(pm.score for pm in product.product_metrics)
+                            task_dict["product_score"] = total_score / len(product.product_metrics) / 10
+                except Exception as e:
+                    # Логируем ошибку, но продолжаем работу
+                    print(f"Error loading product {task.product_id}: {e}")
+            
+            result.append(STask(**task_dict))
+        
+        return result
 
     async def process_stale_fetching_tasks(self) -> None:
         """Сбрасывает застрявшие fetching задачи: retry++, pending, clear worker. При 3-й попытке — failed + refund."""
