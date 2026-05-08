@@ -217,7 +217,7 @@
     </Transition>
 
     <Transition name="fade">
-      <div v-if="showDeleteReportConfirm" class="modal-overlay">
+      <div v-if="showDeleteReportConfirm" class="modal-overlay" @click.self="cancelDeleteReport">
         <div class="modal-content delete-confirm-modal">
           <button @click="cancelDeleteReport" class="close-modal modal-close-big">&times;</button>
           <header class="modal-header">
@@ -237,7 +237,7 @@
     </Transition>
 
     <Transition name="fade">
-      <div v-if="showDeleteConfirm" class="modal-overlay">
+      <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDeleteKey">
         <div class="modal-content delete-confirm-modal">
           <button @click="cancelDeleteKey" class="close-modal modal-close-big">&times;</button>
           <header class="modal-header">
@@ -257,7 +257,7 @@
     </Transition>
 
     <Transition name="fade">
-      <div v-if="showAddKeyModal" class="modal-overlay">
+      <div v-if="showAddKeyModal" class="modal-overlay" @click.self="closeAddKeyModal">
         <div class="modal-content">
           <button @click="closeAddKeyModal" class="close-modal modal-close-big">&times;</button>
           <header class="modal-header">
@@ -1133,6 +1133,7 @@ const sendMessage = async () => {
   top: 10px;
   right: 20px;
   font-size: 28px;
+  line-height: 1;
   background: none;
   border: none;
   cursor: pointer;
@@ -1156,19 +1157,22 @@ const sendMessage = async () => {
 
 .modal-content {
   background: white;
-  border-radius: 12px;
-  max-width: 500px;
+  border-radius: 20px;
   width: 90%;
+  max-width: 500px;
   max-height: 80vh;
+  padding: 30px;
+  position: relative;
   overflow-y: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  margin-bottom: 20px;
+  padding: 0 40px 15px 0;
   border-bottom: 1px solid #eee;
 }
 
@@ -1186,7 +1190,7 @@ const sendMessage = async () => {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 0;
 }
 
 .form-group {
@@ -1540,4 +1544,41 @@ const sendMessage = async () => {
   margin-top: 4px;
   padding: 0 4px;
 }
+.modal-body .info-section {
+  margin-bottom: 24px;
+}
+
+.modal-body .info-section h4 {
+  margin: 0 0 12px;
+  color: #005bff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.modal-body .info-section p {
+  margin: 0;
+  color: #444;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.modal-score-bar {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid #eee;
+}
+
+.modal-score-bar span {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.modal-score-bar .m-bar {
+  margin-bottom: 0;
+}
+
 </style>
