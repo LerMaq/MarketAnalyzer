@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, update, or_, case, exists, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.task import Task, TaskStatus
@@ -85,7 +85,10 @@ class TaskRepository:
         worker_id: Optional[int] = None,
         clear_worker: bool = False,
     ):
-        values: dict[str, Any] = {"status": status}
+        values: dict[str, Any] = {
+            "status": status,
+            "updated_at": datetime.now(timezone.utc)
+        }
         if product_id is not None:
             values["product_id"] = product_id
         if clear_worker:

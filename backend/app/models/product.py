@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy import ForeignKey, Text, Boolean, BigInteger, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 from app.database import Base
 
 class Product(Base):
@@ -59,6 +60,7 @@ class Metric(Base):
     description: Mapped[Optional[str]]
     weight: Mapped[float] = mapped_column(default=1.0)
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False)
+    embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(4096), nullable=True)
 
     def __repr__(self):
         return f"<Metric(id={self.id}, name='{self.name}', weight={self.weight})>"

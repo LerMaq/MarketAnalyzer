@@ -1,4 +1,4 @@
-﻿from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models.product import Product, Metric
@@ -93,7 +93,7 @@ class ProductRepository:
         return result.scalars().first()
 
     async def save_all(self, product: Product):
-        """РЎРѕС…СЂР°РЅСЏРµС‚ РїСЂРѕРґСѓРєС‚ Рё РІСЃРµ СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ РЅРёРј РѕР±СЉРµРєС‚С‹ (summary, metrics, etc.)"""
+        """Сохраняет продукт и все связанные с ним объекты (summary, metrics, etc.)"""
         self.db.add(product)
         await self.db.commit()
         await self.db.refresh(product)
@@ -116,6 +116,40 @@ class ProductRepository:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def search_metrics(self, query: str, limit: int = 10) -> List[Metric]:
+        """
+        Полнотекстовый поиск кастомных метрик по названию и описанию.
+        Разбивает запрос на слова и ищет метрики, содержащие хотя бы одно из слов.
+        """
+        # Разбиваем запрос на слова (минимум 2 символа)
+        words = [w.strip() for w in query.split() if len(w.strip()) >= 2]
+        
+        if not words:
+            return []
+        
+        # Создаём условия для каждого слова
+        conditions = []
+        for word in words:
+            pattern = f"%{word}%"
+            conditions.append(
+                (Metric.name.ilike(pattern)) | (Metric.description.ilike(pattern))
+            )
+        
+        # Объединяем условия через OR (хотя бы одно слово должно совпасть)
+        from sqlalchemy import or_
+        combined_condition = or_(*conditions)
+        
+        sql_query = (
+            select(Metric)
+            .where(
+                Metric.is_custom == True,
+                combined_condition
+            )
+            .limit(limit)
+        )
+        result = await self.db.execute(sql_query)
+        return list(result.scalars().all())
+
     async def get_all_products_with_metrics(self) -> List[Product]:
         """Все продукты с метриками для расчёта топа"""
         query = (
@@ -135,5 +169,44 @@ class ProductRepository:
         """Удалить товар и сохранить изменения."""
         await self.db.delete(product)
         await self.db.commit()
+
+    async def update_metric_embedding(self, metric_id: int, embedding: List[float]) -> None:
+        """Обновить векторное представление метрики"""
+        query = select(Metric).where(Metric.id == metric_id)
+        result = await self.db.execute(query)
+        metric = result.scalar_one_or_none()
+
+        if metric:
+            metric.embedding = embedding
+            await self.db.commit()
+            await self.db.refresh(metric)
+
+    async def vector_search_metrics(self, query_embedding: List[float], limit: int = 10, is_custom: Optional[bool] = None) -> List[Metric]:
+        """Векторный поиск метрик по эмбеддингу запроса"""
+        # Базовый запрос с сортировкой по косинусному расстоянию
+        query = (
+            select(Metric)
+            .where(Metric.embedding.isnot(None))
+            .order_by(Metric.embedding.cosine_distance(query_embedding))
+            .limit(limit)
+        )
+
+        # Фильтр по типу метрики (кастомная или стандартная)
+        if is_custom is not None:
+            query = query.where(Metric.is_custom == is_custom)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_metrics_without_embeddings(self, limit: int = 100) -> List[Metric]:
+        """Получить метрики без векторных представлений для генерации эмбеддингов"""
+        query = (
+            select(Metric)
+            .where(Metric.embedding.is_(None))
+            .limit(limit)
+            .order_by(Metric.id.desc())
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 
 

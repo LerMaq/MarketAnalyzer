@@ -258,7 +258,7 @@ class TaskService:
             if not current or current.status != TaskStatus.fetching:
                 continue
             new_retry = await self.task_repo.increment_retry(task.id)
-            if new_retry >= 3:
+            if new_retry > 3:
                 await self.task_repo.update_status(task.id, TaskStatus.failed, clear_worker=True)
                 user_service = UserService(self.db)
                 await user_service.refund_balance(task.user_id)
