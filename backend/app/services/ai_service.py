@@ -53,9 +53,9 @@ class AIService:
             "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
             "models": [
                 SModelPreset(model_name="gemini-2.5-flash", priority=8),
-                SModelPreset(model_name="gemini-3-flash", priority=8),
+                SModelPreset(model_name="gemini-3.5-flash", priority=8),
                 SModelPreset(model_name="gemini-2.5-flash-lite", priority=10),
-                SModelPreset(model_name="gemma-3-27b-it", priority=3),
+                SModelPreset(model_name="gemini-3.1-flash-lite", priority=11),
             ]
         },
         "openai": {
@@ -80,59 +80,61 @@ class AIService:
         if not config:
             raise HTTPException(status_code=500, detail="AI Config 'report_generation' not found")
 
-        standards = await self.prod_repo.get_standard_metrics()
-        standards_text = "\n".join([f"- {m.name}: {m.description}. Вес: {m.weight}" for m in standards])
+        search_context = raw_content[:1000]
 
-        # Определяем tools для поиска метрик
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_metrics",
-                    "description": "Поиск кастомных метрик в базе данных по названию или описанию. Используй этот инструмент для поиска существующих метрик перед созданием новых.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Поисковый запрос: название метрики или ключевые слова из описания (например, 'прочность', 'качество звука', 'удобство использования')"
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "Максимальное количество результатов поиска",
-                                "default": 10
-                            }
-                        },
-                        "required": ["query"]
-                    }
-                }
-            }
-        ]
+        print(f"Генерация эмбеддинга для анализа: len(raw_content)={len(raw_content)}, len(search_context)={len(search_context)}")
+        try:
+            query_vector = await self.embedding_service.get_vector(search_context)
+            print(f"Эмбеддинг успешно сгенерирован: dim={len(query_vector)}")
+        except Exception as e:
+            print(f"Ошибка генерации эмбеддинга перед анализом: {e}")
+            raise
+
+        relevant_metrics = await self.prod_repo.get_metrics_with_similarity(query_vector, limit=40)
+        quality_metrics_count = sum(1 for m in relevant_metrics if m['score'] > settings.METRIC_SIMILARITY_THRESHOLD)
+        strict_mode = quality_metrics_count >= settings.MIN_QUALITY_METRICS_COUNT
+
+        if strict_mode:
+            custom_instruction = (
+                "БАЗА ДАННЫХ ПОЛНОСТЬЮ УКОМПЛЕКТОВАНА. Тебе КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО создавать новые кастомные метрики. "
+                "Используй только предоставленные метрики из списка ниже."
+            )
+        else:
+            custom_instruction = (
+                "Ты можешь использовать предоставленные метрики или создать новые, "
+                "но только если среди предложенных нет ничего подходящего."
+            )
+
+        standards = await self.prod_repo.get_standard_metrics()
+        standards_text = "\n".join([f"- {m.name}: {m.description}. Вес: {m.weight}" for m in standards[:10]])
         
+        customs_text = "\n".join([
+            f"- {m['metric'].name}: {m['metric'].description}. Вес: {m['metric'].weight} (similarity: {m['score']:.3f})"
+            for m in relevant_metrics
+        ])
+
         user_content = (
-            f"СПРАВОЧНИК СТАНДАРТНЫХ МЕТРИК:\n\n"
-            f"Стандартные метрики (product_metrics_standard) — выбери любые 5:\n{standards_text}\n\n"
-            f"ИНСТРУМЕНТ ДЛЯ ПОИСКА КАСТОМНЫХ МЕТРИК:\n"
-            f"У тебя есть доступ к функции search_metrics для поиска кастомных метрик в базе данных. "
-            f"ОБЯЗАТЕЛЬНО используй её перед созданием новых метрик! Сделай несколько поисковых запросов "
-            f"с разными ключевыми словами, связанными с товаром (например, для наушников: 'звук', 'качество звука', "
-            f"'удобство', 'батарея', 'шумоподавление'). Если найдёшь подходящие метрики — используй их. "
-            f"Создавай новые метрики только если поиск не дал релевантных результатов.\n\n"
+            f"СПРАВОЧНИК СТАНДАРТНЫХ МЕТРИК (выбери любые 5):\n{standards_text}\n\n"
+            f"КАСТОМНЫЕ МЕТРИКИ (найдено {len(relevant_metrics)}, из них качественных: {quality_metrics_count}):\n{customs_text}\n\n"
+            f"ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ МЕТРИК:\n{custom_instruction}\n\n"
             f"ДАННЫЕ ТОВАРА ДЛЯ АНАЛИЗА:\n{raw_content}\n\n"
-            f"ЗАДАНИЕ: Проанализируй товар и выдай JSON строго по структуре из системной инструкции."
+            f"ЗАДАНИЕ: Проанализируй товар и выдай JSON строго по структуре из системной инструкции. "
+            f"В поле 'thinking' объясни, какие кастомные метрики ты выбрал и почему отбросил другие."
         )
 
         messages = [
             {"role": "user", "content": user_content}
         ]
+        
         print(f"В нейросеть отправляются данные о товаре для анализа...")
-        # print(f"В нейросеть отправляются следующие данные о товаре для анализа:"
-        #       f"{messages}")
+        print(f"Режим: {'STRICT (запрет создания новых метрик)' if strict_mode else 'FLEXIBLE (можно создавать новые)'}")
+        print(f"Найдено релевантных метрик: {len(relevant_metrics)}, качественных: {quality_metrics_count}")
 
         for v_attempt in range(3):
             try:
-                raw_response = await self.execute(config=config, messages=messages, tools=tools)
-                print(f"Нейросеть сгенерировала отчёт! Вот её чистый ответ: {raw_response}")
+                print(f"Попытка {v_attempt + 1}/3: выполнить AI-вызов для задачи")
+                raw_response = await self.execute(config=config, messages=messages)
+                print(f"Нейросеть вернула ответ: {raw_response}")
 
                 # Извлекаем JSON из текста (если он обёрнут в markdown или содержит лишний текст)
                 if isinstance(raw_response, str):
@@ -146,6 +148,7 @@ class AIService:
                     parsed_json = raw_response
 
                 validated_data = SAiAnalysisResponse.model_validate(parsed_json)
+                print(f"Анализ успешно валидирован Pydantic.")
                 return validated_data
 
             except ValidationError as ve:
@@ -154,15 +157,15 @@ class AIService:
                 # но пока просто пробуем еще раз
                 continue
             except Exception as e:
+                print(f"Ошибка на этапе AI-анализа: {e}")
                 raise HTTPException(status_code=503, detail=f"Ошибка провайдера ИИ: {str(e)}")
 
         raise HTTPException(status_code=500, detail="ИИ не смог выдать валидный JSON после 3 попыток")
 
-    async def execute(self, config, messages, tools=None, model_record=None):
+    async def execute(self, config, messages, model_record=None):
         """
         Выполняет запрос к ИИ.
         Если model_record не передан или не работает, перебирает лучшие системные модели.
-        Поддерживает function calling через параметр tools.
         """
         # Слой перебора моделей
         for m_attempt in range(10):
@@ -181,6 +184,7 @@ class AIService:
                 base_url_val = model_record.provider_url
                 model_name_val = model_record.model_name
 
+            print(f"Попытка модели {m_attempt + 1}/10: модель={model_name_val}, base_url={base_url_val}")
             http_client = httpx.AsyncClient(proxy=settings.HTTP_PROXY if settings.HTTP_PROXY else None)
             try:
                 client = AsyncOpenAI(
@@ -189,7 +193,7 @@ class AIService:
                     http_client=http_client
                 )
 
-                # Копируем messages для работы с tool calls
+                # Копируем messages для работы
                 working_messages = [{"role": "system", "content": config.system_instruction}] + messages.copy()
 
                 request_params = {
@@ -199,102 +203,16 @@ class AIService:
                     "stream": config.is_stream
                 }
 
-                # Добавляем tools если они переданы
-                if tools:
-                    request_params["tools"] = tools
-                    request_params["tool_choice"] = "auto"
-
                 if config.is_json and not config.is_stream:
                     request_params["response_format"] = {"type": "json_object"}
 
+                print(f"Запрос к модели: {request_params}")
                 response = await client.chat.completions.create(**request_params)
+                print(f"Ответ от модели получен, response type={type(response)}")
 
                 # Обработка стриминга
                 if config.is_stream:
                     return self.create_stream_generator(response, http_client)
-
-                # ЦИКЛ обработки tool calls
-                max_tool_iterations = 10
-                tool_iteration = 0
-                
-                while response.choices[0].finish_reason == "tool_calls" and tool_iteration < max_tool_iterations:
-                    tool_iteration += 1
-                    
-                    # Добавляем ответ ИИ с tool_calls в историю
-                    assistant_message = response.choices[0].message
-                    working_messages.append({
-                        "role": "assistant",
-                        "content": assistant_message.content,
-                        "tool_calls": [
-                            {
-                                "id": tc.id,
-                                "type": tc.type,
-                                "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments
-                                }
-                            }
-                            for tc in assistant_message.tool_calls
-                        ]
-                    })
-                    
-                    # Выполняем каждый запрошенный tool
-                    for tool_call in assistant_message.tool_calls:
-                        function_name = tool_call.function.name
-                        arguments = json.loads(tool_call.function.arguments)
-                        
-                        print(f"ИИ вызывает tool: {function_name} с аргументами: {arguments}")
-                        
-                        # Выполняем функцию
-                        if function_name == "search_metrics":
-                            query_text = arguments.get("query", "")
-                            limit = arguments.get("limit", 10)
-
-                            try:
-                                # Генерируем эмбеддинг для поискового запроса
-                                query_embedding = await self.embedding_service.generate_embedding(query_text)
-
-                                # Векторный поиск по эмбеддингам
-                                result = await self.prod_repo.vector_search_metrics(
-                                    query_embedding=query_embedding,
-                                    limit=limit,
-                                    is_custom=True  # Ищем только кастомные метрики
-                                )
-
-                                # Если векторный поиск не дал результатов, используем текстовый
-                                if not result:
-                                    result = await self.prod_repo.search_metrics(
-                                        query=query_text,
-                                        limit=limit
-                                    )
-                            except Exception as e:
-                                print(f"Ошибка векторного поиска, используем текстовый: {e}")
-                                # Fallback на текстовый поиск при ошибке
-                                result = await self.prod_repo.search_metrics(
-                                    query=query_text,
-                                    limit=limit
-                                )
-
-                            result_str = json.dumps([{
-                                "name": m.name,
-                                "description": m.description,
-                                "weight": m.weight
-                            } for m in result], ensure_ascii=False)
-                        else:
-                            result_str = json.dumps({"error": f"Unknown function: {function_name}"})
-                        
-                        print(f"Результат tool {function_name}: {result_str[:200]}...")
-                        
-                        # Добавляем результат в историю
-                        working_messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": result_str
-                        })
-                    
-                    # ПРОДОЛЖАЕМ тот же запрос с новыми данными
-                    request_params["messages"] = working_messages
-                    response = await client.chat.completions.create(**request_params)
 
                 # Обработка финального ответа
                 result = response.choices[0].message.content

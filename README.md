@@ -31,19 +31,13 @@ MarketAnalyzer — это web-сервис для автоматизирован
 #### 1. Запуск Backend
 
 ```bash
-# Переход в директорию backend
 cd backend
 
-# Создание виртуального окружения
 python -m venv .venv
 # source .venv/bin/activate  # Linux/Mac
-# или
-.venv\Scripts\activate  # Windows
-
-# Установка зависимостей
+.venv\Scripts\activate
 pip install -r requirements.txt
 
-# Запуск сервера разработки
 python run.py
 ```
 
@@ -91,9 +85,7 @@ docker compose up -d
 ```
 
 Просмотр логов:
-```bash
-docker logs -f marketanalyzer-scraper-dev
-```
+`docker logs -f marketanalyzer-scraper-dev`
 
 #### 4. Миграция БД
 Миграцию выполняют при необходимости изменить структуру (добавить, изменить таблицы), не пересоздавая БД. Это может понадобиться, если в базе уже есть важные данные, которые нельзя просто удалить (например, когда сервис уже запущен в продакшн).

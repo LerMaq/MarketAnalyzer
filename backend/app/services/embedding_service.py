@@ -1,5 +1,6 @@
 import asyncio
 from typing import List
+import httpx
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
@@ -9,9 +10,13 @@ class EmbeddingService:
     """Сервис для генерации эмбеддингов"""
     
     def __init__(self):
+        self.http_client = httpx.AsyncClient(
+            proxy=settings.HTTP_PROXY if settings.HTTP_PROXY else None
+        )
         self.client = AsyncOpenAI(
             base_url=settings.EMBEDDING_API_BASE_URL,
-            api_key=settings.EMBEDDING_API_KEY
+            api_key=settings.EMBEDDING_API_KEY,
+            http_client=self.http_client
         )
         self.model = settings.EMBEDDING_MODEL
         self.dimension = settings.EMBEDDING_DIMENSION
@@ -38,6 +43,10 @@ class EmbeddingService:
             return embedding
         except Exception as e:
             raise ValueError(f"Ошибка генерации эмбеддинга: {str(e)}")
+
+    async def get_vector(self, text: str) -> List[float]:
+        """Alias для generate_embedding - получает вектор из текста"""
+        return await self.generate_embedding(text)
 
     async def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Генерирует векторные представления для списка текстов"""

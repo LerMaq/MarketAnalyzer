@@ -33,7 +33,7 @@
             <div class="detail-item" v-if="task.product_score !== null && task.product_score !== undefined">
               <span class="detail-label">Оценка:</span>
               <span class="score-value" :class="getScoreClass(task.product_score)">
-                {{ task.product_score.toFixed(1) }}/10
+                {{ (task.product_score * 10).toFixed(1) }}
               </span>
             </div>
             <div class="detail-item" v-if="task.product_price">
@@ -145,8 +145,10 @@ const getStatusMessage = (status) => {
 }
 
 const getScoreClass = (score) => {
-  if (score >= 8) return 'score-high'
-  if (score >= 6) return 'score-medium'
+  // Scale score from 0-10 to 0-100 for classification
+  const scaled = score * 10
+  if (scaled >= 80) return 'score-high'
+  if (scaled >= 60) return 'score-medium'
   return 'score-low'
 }
 

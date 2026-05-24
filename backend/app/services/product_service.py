@@ -38,6 +38,7 @@ class ProductService:
         versions = [
             SProductVersion(
                 id=p.id,
+                ozon_id=p.ozon_id,
                 date_added=p.date_added,
                 review_count=review_counts.get(p.id, 0)
             )
@@ -150,7 +151,10 @@ class ProductService:
             except Exception as e:
                 print(f"Ошибка кастомной метрики {pm.metric.name}: {e}")
 
-        return await self.product_repo.save_all(product)
+        product = await self.product_repo.save_all(product)
+        # Avoid accessing lazy-loaded relationships after commit to prevent MissingGreenlet errors
+        print(f"Продукт сохранён: ozon_id={ozon_id}, product.id={product.id}")
+        return product
     async def delete_product(self, product_id: int, user: Optional[User]) -> dict:
         """Удалить товар и все связанные данные (только для администраторов)."""
         if not user:

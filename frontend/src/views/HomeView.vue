@@ -130,7 +130,7 @@
             <span class="time">{{ new Date(v.date_added).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
             <span class="version-meta">{{ v.review_count ?? 0 }} отзывов</span>
           </div>
-          <button @click="$router.push(`/product/${v.ozon_id}/${v.id}`)" class="open-btn">
+          <button @click="openProductReport(v)" class="open-btn">
             Открыть отчет
           </button>
         </div>
@@ -157,7 +157,7 @@
           v-for="(product, index) in topProducts"
           :key="product.id"
           class="top-card"
-          @click="$router.push(`/product/${product.ozon_id}/${product.id}`)"
+          @click="openProductReport(product)"
         >
           <div class="top-card-rank" :class="rankClass(index)">{{ index + 1 }}</div>
           <div class="top-card-body">
@@ -205,10 +205,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../api/client'
 import auth from '../auth'
-import { addTask, tasks as backgroundTasks } from '../analysisTracker'
+import { addTask, updateTaskOptions, tasks as backgroundTasks } from '../analysisTracker'
 
+const router = useRouter()
 const urlOrQuery = ref('')
 const versions = ref([])
 const isLoading = ref(false)
@@ -216,6 +218,7 @@ const taskStatus = ref(null)
 const taskRetryCount = ref(0)
 const currentTaskId = ref(null)
 const recentSearches = ref([])
+const checkedOzonId = ref(null)
 const isFocused = ref(false)
 const topProducts = ref([])
 const isTopProductsLoading = ref(true)
@@ -344,6 +347,26 @@ const clearHistory = () => {
   isFocused.value = false
 }
 
+const normalizeArticle = (value) => {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  if (!normalized || normalized === 'undefined' || normalized === 'null') return null
+  return normalized
+}
+
+const getReportArticle = (report, fallbackArticle = null) => {
+  const directArticle = normalizeArticle(
+    report?.ozon_id ?? report?.article ?? report?.ozon_article ?? report?.product_ozon_id
+  )
+  return directArticle || normalizeArticle(fallbackArticle)
+}
+
+const openProductReport = (report) => {
+  if (!report?.id) return
+  const article = getReportArticle(report, checkedOzonId.value) || 'unknown'
+  router.push(`/product/${article}/${report.id}`)
+}
+
 const handleSearch = async () => {
   const query = urlOrQuery.value.trim();
   if (!query) return;
@@ -351,6 +374,7 @@ const handleSearch = async () => {
   isFocused.value = false;
   errorMessage.value = '';
   currentTaskId.value = null;
+  checkedOzonId.value = null;
   addToHistory(query);
   isLoading.value = true;
   versions.value = [];
@@ -360,6 +384,7 @@ const handleSearch = async () => {
 
   try {
     const res = await api.post('/products/check', { url: query });
+    checkedOzonId.value = normalizeArticle(res.data?.ozon_id);
     const foundVersions = res.data.versions || [];
 
     if (foundVersions.length > 0) {
@@ -411,7 +436,7 @@ const startNewTask = async () => {
       taskRetryCount.value = 0;
       isBackground.value = false;
       isLoading.value = false;
-      addTask(newTaskId);
+      addTask(newTaskId, { openOnComplete: true });
     } else {
       console.error("Сервер не вернул ID задачи:", res.data);
       isLoading.value = false;
@@ -455,10 +480,16 @@ const clearError = () => {
 
 const minimizeAnalysis = () => {
   isBackground.value = true
+  if (currentTaskId.value) {
+    updateTaskOptions(currentTaskId.value, { openOnComplete: false })
+  }
 }
 
 const restoreAnalysis = () => {
   isBackground.value = false
+  if (currentTaskId.value) {
+    updateTaskOptions(currentTaskId.value, { openOnComplete: true })
+  }
 }
 </script>
 

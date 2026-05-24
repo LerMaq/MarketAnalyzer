@@ -196,19 +196,27 @@ class TaskService:
 
         try:
             # Анализ через системные промпты и модели
+            print(f"Task {task_id}: запуск AI-анализа")
             ai_result = await ai_service.get_report_completion(worker_data.raw_content)
+            print(f"Task {task_id}: AI-результат получен. name={ai_result.product.name}, price={ai_result.product.price}")
 
             product = await product_service.create_full_product(
                 ozon_id=task.ozon_id,
                 raw_content=worker_data.raw_content,
                 ai_result=ai_result,
             )
+            print(f"Task {task_id}: продукт создан с id={product.id}")
 
             await self.task_repo.update_status(
                 task_id, status=TaskStatus.completed, product_id=product.id
             )
-        except Exception:
+            print(f"Task {task_id}: статус COMPLETED")
+        except Exception as e:
+            print(f"Task {task_id}: ошибка при финализации анализа: {e}")
+            import traceback
+            traceback.print_exc()
             await self.task_repo.update_status(task_id, status=TaskStatus.failed)
+            print(f"Task {task_id}: статус FAILED поставлен")
 
     async def get_user_tasks(self, user_id: int) -> List[STask]:
         tasks = await self.task_repo.get_by_user_id(user_id)

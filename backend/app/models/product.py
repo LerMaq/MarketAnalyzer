@@ -60,7 +60,7 @@ class Metric(Base):
     description: Mapped[Optional[str]]
     weight: Mapped[float] = mapped_column(default=1.0)
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False)
-    embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(4096), nullable=True)
+    embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(3072), nullable=True)
 
     def __repr__(self):
         return f"<Metric(id={self.id}, name='{self.name}', weight={self.weight})>"

@@ -5,6 +5,7 @@ const STORAGE_KEY = 'analysis_tasks'
 
 const tasks = ref([])
 const notifications = ref([])
+const navigationRequests = ref([])
 
 let pollTimer = null
 let pollingInProgress = false
@@ -30,9 +31,14 @@ const saveTasks = () => {
   }
 }
 
+const createClientId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`
+
 const pushNotification = (payload) => {
-  const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`
-  notifications.value.push({ id, ...payload })
+  notifications.value.push({ id: createClientId(), ...payload })
+}
+
+const pushNavigationRequest = (payload) => {
+  navigationRequests.value.push({ id: createClientId(), ...payload })
 }
 
 const removeTask = (taskId) => {
@@ -72,13 +78,22 @@ const pollOnce = async () => {
 
         if (data.status === 'completed') {
           if (data.ozon_id && data.product_id) {
-            pushNotification({
-              type: 'success',
-              title: 'Анализ завершён',
-              message: 'Отчёт готов. Можно открыть результат.',
-              actionLabel: 'Открыть отчёт',
-              actionPath: `/product/${data.ozon_id}/${data.product_id}`
-            })
+            const actionPath = `/product/${data.ozon_id}/${data.product_id}`
+
+            if (task.openOnComplete) {
+              pushNavigationRequest({
+                taskId: task.id,
+                path: actionPath
+              })
+            } else {
+              pushNotification({
+                type: 'success',
+                title: 'Анализ завершён',
+                message: 'Отчёт готов. Можно открыть результат.',
+                actionLabel: 'Открыть отчёт',
+                actionPath
+              })
+            }
           } else {
             pushNotification({
               type: 'success',
@@ -121,7 +136,7 @@ const stopPolling = () => {
   pollTimer = null
 }
 
-const addTask = (taskId) => {
+const addTask = (taskId, options = {}) => {
   if (!taskId) return
   const existing = tasks.value.find(t => t.id === taskId)
   if (!existing) {
@@ -129,8 +144,13 @@ const addTask = (taskId) => {
       id: taskId,
       status: 'pending',
       retry_count: 0,
-      created_at: Date.now()
+      created_at: Date.now(),
+      openOnComplete: false,
+      ...options
     })
+    saveTasks()
+  } else if (Object.keys(options).length > 0) {
+    Object.assign(existing, options)
     saveTasks()
   }
   startPolling()
@@ -147,10 +167,21 @@ const dismissNotification = (id) => {
   notifications.value = notifications.value.filter(n => n.id !== id)
 }
 
+const consumeNavigationRequest = (id) => {
+  navigationRequests.value = navigationRequests.value.filter(item => item.id !== id)
+}
+
+const updateTaskOptions = (taskId, patch) => {
+  updateTask(taskId, patch)
+}
+
 export {
   tasks,
   notifications,
+  navigationRequests,
   addTask,
   initTracker,
-  dismissNotification
+  dismissNotification,
+  consumeNavigationRequest,
+  updateTaskOptions
 }

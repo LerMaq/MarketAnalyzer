@@ -1,4 +1,4 @@
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, bindparam
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models.product import Product, Metric
@@ -105,51 +105,6 @@ class ProductRepository:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_random_custom_metrics(self, limit: int = 30) -> List[Metric]:
-        """Случайные метрики с is_custom=True"""
-        query = (
-            select(Metric)
-            .where(Metric.is_custom == True)
-            .order_by(func.random())
-            .limit(limit)
-        )
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
-    async def search_metrics(self, query: str, limit: int = 10) -> List[Metric]:
-        """
-        Полнотекстовый поиск кастомных метрик по названию и описанию.
-        Разбивает запрос на слова и ищет метрики, содержащие хотя бы одно из слов.
-        """
-        # Разбиваем запрос на слова (минимум 2 символа)
-        words = [w.strip() for w in query.split() if len(w.strip()) >= 2]
-        
-        if not words:
-            return []
-        
-        # Создаём условия для каждого слова
-        conditions = []
-        for word in words:
-            pattern = f"%{word}%"
-            conditions.append(
-                (Metric.name.ilike(pattern)) | (Metric.description.ilike(pattern))
-            )
-        
-        # Объединяем условия через OR (хотя бы одно слово должно совпасть)
-        from sqlalchemy import or_
-        combined_condition = or_(*conditions)
-        
-        sql_query = (
-            select(Metric)
-            .where(
-                Metric.is_custom == True,
-                combined_condition
-            )
-            .limit(limit)
-        )
-        result = await self.db.execute(sql_query)
-        return list(result.scalars().all())
-
     async def get_all_products_with_metrics(self) -> List[Product]:
         """Все продукты с метриками для расчёта топа"""
         query = (
@@ -181,22 +136,47 @@ class ProductRepository:
             await self.db.commit()
             await self.db.refresh(metric)
 
-    async def vector_search_metrics(self, query_embedding: List[float], limit: int = 10, is_custom: Optional[bool] = None) -> List[Metric]:
-        """Векторный поиск метрик по эмбеддингу запроса"""
-        # Базовый запрос с сортировкой по косинусному расстоянию
+    async def get_metrics_with_similarity(self, query_vector: List[float], limit: int = 40) -> List[dict]:
+        """
+        Векторный поиск кастомных метрик с вычислением similarity score.
+        Возвращает список словарей с метрикой и её оценкой схожести.
+        """
+        query_vector_param = bindparam("query_vector", query_vector, type_=Metric.embedding.type)
+        distance_expr = Metric.embedding.cosine_distance(query_vector_param)
+        similarity_expr = (1 - distance_expr)
+
         query = (
-            select(Metric)
-            .where(Metric.embedding.isnot(None))
-            .order_by(Metric.embedding.cosine_distance(query_embedding))
+            select(
+                Metric.id,
+                Metric.name,
+                Metric.description,
+                Metric.weight,
+                Metric.is_custom,
+                similarity_expr.label("similarity")
+            )
+            .where(Metric.is_custom == True, Metric.embedding.is_not(None))
+            .order_by(distance_expr)
             .limit(limit)
         )
 
-        # Фильтр по типу метрики (кастомная или стандартная)
-        if is_custom is not None:
-            query = query.where(Metric.is_custom == is_custom)
-
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rows = result.fetchall()
+
+        metrics_with_scores = []
+        for row in rows:
+            metric = Metric(
+                id=row.id,
+                name=row.name,
+                description=row.description,
+                weight=row.weight,
+                is_custom=row.is_custom
+            )
+            metrics_with_scores.append({
+                "metric": metric,
+                "score": float(row.similarity)
+            })
+
+        return metrics_with_scores
 
     async def get_metrics_without_embeddings(self, limit: int = 100) -> List[Metric]:
         """Получить метрики без векторных представлений для генерации эмбеддингов"""

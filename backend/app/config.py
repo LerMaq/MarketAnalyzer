@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     HTTP_PROXY: Optional[str] = None
     EMBEDDING_API_KEY: str
     EMBEDDING_API_BASE_URL: str = "https://openrouter.ai/api/v1"
-    EMBEDDING_MODEL: str = "qwen/qwen3-embedding-8b"
-    EMBEDDING_DIMENSION: int = 4096
+    EMBEDDING_MODEL: str = "google/gemini-embedding-2-preview"
+    EMBEDDING_DIMENSION: int = 3072
+    METRIC_SIMILARITY_THRESHOLD: float = 0.62
+    MIN_QUALITY_METRICS_COUNT: int = 10
 
     # Меняем тип на Any, чтобы Pydantic не паниковал при получении строки
     CORS_ORIGINS: Any = [
