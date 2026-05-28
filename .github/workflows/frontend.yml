@@ -1,0 +1,57 @@
+name: Build, publish and deploy frontend
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+    tags:
+      - "frontend-v*"
+  workflow_dispatch:
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare Docker tags
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/frontend-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/frontend-v}"
+            echo "tags=lermak/marketanalyzer-frontend:$VERSION,lermak/marketanalyzer-frontend:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=lermak/marketanalyzer-frontend:latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Deploy frontend to server
+        if: ${{ vars.FRONTEND_DEPLOY_ENABLED == 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/frontend-v')) }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.FRONTEND_SERVER_HOST }}
+          username: ${{ secrets.FRONTEND_SERVER_USER }}
+          key: ${{ secrets.FRONTEND_SERVER_SSH_KEY }}
+          script: |
+            cd /opt/marketanalyzer-frontend
+            docker compose pull
+            docker compose up -d
+            docker image prune -f

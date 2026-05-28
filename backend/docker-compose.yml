@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    image: lermak/marketanalyzer-backend:latest
+    container_name: marketanalyzer-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.market-api.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.market-api.entrypoints=websecure"
+      - "traefik.http.routers.market-api.tls=true"
+      - "traefik.http.routers.market-api.tls.certresolver=le"
+      
+      - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api"
+      - "traefik.http.routers.market-api.middlewares=api-strip"
+      
+      - "traefik.http.services.market-api.loadbalancer.server.port=8000"
+
+networks:
+  traefik-public:
+    external: true
