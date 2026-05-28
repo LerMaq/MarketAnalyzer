@@ -5,8 +5,15 @@ import asyncio
 from app.repositories import TaskRepository, UserRepository
 from app.utils import extract_ozon_id
 from app.models.user import User
+from app.models.worker import Worker
 from app.models.task import TaskStatus
-from app.schemas.task import STask, STaskAddedResponse, STaskWorkerTake, STaskWorkerData
+from app.schemas.task import (
+    ALLOWED_REVIEW_COUNTS,
+    STask,
+    STaskAddedResponse,
+    STaskWorkerTake,
+    STaskWorkerData,
+)
 
 from .ai_service import AIService
 from .product_service import ProductService
@@ -19,11 +26,25 @@ class TaskService:
         self.user_repo = UserRepository(db)
         self.db = db
 
-    async def add_new_task(self, url_or_id: str, user: Optional[User]) -> STaskAddedResponse:
+    async def add_new_task(
+        self,
+        url_or_id: str,
+        user: Optional[User],
+        review_count: int = 50,
+    ) -> STaskAddedResponse:
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
         if "task.analysis" not in user.active_permissions:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для запуска анализа")
+
+        if review_count not in ALLOWED_REVIEW_COUNTS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"review_count должен быть одним из {ALLOWED_REVIEW_COUNTS}",
+            )
+
+        if review_count != 50 and "task.priority_queue" not in user.active_permissions:
+            review_count = 50
 
         usage = await self.user_repo.get_or_create_today_usage(user.id)
         max_limit = user.daily_limits.get("analysis", 0)
@@ -43,25 +64,30 @@ class TaskService:
         if existing:
             return STaskAddedResponse(status=existing.status, task_id=existing.id)
 
-        task = await self.task_repo.create(ozon_id, user_id=user.id)
+        task = await self.task_repo.create(
+            ozon_id, user_id=user.id, review_count=review_count
+        )
         await self.user_repo.increment_usage(user.id, analysis=True)
 
         return STaskAddedResponse(status=task.status, task_id=task.id)
 
-    async def verify_worker_access(self, user: Optional[User]):
-        """Вспомогательный метод для проверки прав воркера"""
-        if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Необходима авторизация")
-        if "task.worker" not in user.active_permissions:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ только для воркеров")
-
-    async def take_task_for_worker(self, user: Optional[User]) -> Optional[STaskWorkerTake]:
-        await self.verify_worker_access(user)
+    async def take_task_for_worker(
+        self, worker: Optional[Worker]
+    ) -> Optional[STaskWorkerTake]:
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный или неактивный X-Worker-Token",
+            )
 
         # 1. Первая быстрая проверка (без ожидания)
-        task = await self.task_repo.get_next_pending_and_assign(user.id)
+        task = await self.task_repo.get_next_pending_and_assign(worker.id)
         if task:
-            return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+            return STaskWorkerTake(
+                task_id=task.id,
+                ozon_id=task.ozon_id,
+                review_count=task.review_count,
+            )
 
         # 2. Если пусто — создаем отдельное соединение для ожидания
         # Используем raw_connection из того же движка, но не через сессию
@@ -80,15 +106,25 @@ class TaskService:
 
             try:
                 # Сразу после подписки проверяем ЕЩЕ РАЗ (чтобы не проспать задачу)
-                task = await self.task_repo.get_next_pending_and_assign(user.id)
-                if task: return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+                task = await self.task_repo.get_next_pending_and_assign(worker.id)
+                if task:
+                    return STaskWorkerTake(
+                        task_id=task.id,
+                        ozon_id=task.ozon_id,
+                        review_count=task.review_count,
+                    )
 
                 # Ждем уведомления ровно 25 секунд
                 try:
                     await asyncio.wait_for(queue.get(), timeout=25.0)
                     # Как только "пинг" пришел — возвращаемся в основную сессию за задачей
-                    task = await self.task_repo.get_next_pending_and_assign(user.id)
-                    if task: return STaskWorkerTake(task_id=task.id, ozon_id=task.ozon_id)
+                    task = await self.task_repo.get_next_pending_and_assign(worker.id)
+                    if task:
+                        return STaskWorkerTake(
+                            task_id=task.id,
+                            ozon_id=task.ozon_id,
+                            review_count=task.review_count,
+                        )
                 except asyncio.TimeoutError:
                     return None  # Выходим по тайм-ауту, воркер перезайдет
             finally:
@@ -103,9 +139,19 @@ class TaskService:
         return STask.model_validate(task)
 
     async def process_worker_complete(
-        self, task_id: int, worker_data: STaskWorkerData, background_tasks, worker: User
+        self,
+        task_id: int,
+        worker_data: STaskWorkerData,
+        background_tasks,
+        worker: Optional[Worker],
     ) -> dict:
         """Проверить raw_content, обработать повторную попытку/сбой или добавить анализ ИИ в очередь."""
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный или неактивный X-Worker-Token",
+            )
+
         task = await self.task_repo.get_by_id(task_id)
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
@@ -123,7 +169,7 @@ class TaskService:
             }
 
         report_text = worker_data.raw_content
-        if len(report_text) < 5000:
+        if len(report_text) < 3000:
             retry_count = await self.task_repo.increment_retry(task_id)
             if retry_count < 3:
                 await self.task_repo.update_status(
@@ -150,23 +196,67 @@ class TaskService:
 
         try:
             # Анализ через системные промпты и модели
+            print(f"Task {task_id}: запуск AI-анализа")
             ai_result = await ai_service.get_report_completion(worker_data.raw_content)
+            print(f"Task {task_id}: AI-результат получен. name={ai_result.product.name}, price={ai_result.product.price}")
 
             product = await product_service.create_full_product(
                 ozon_id=task.ozon_id,
                 raw_content=worker_data.raw_content,
                 ai_result=ai_result,
             )
+            print(f"Task {task_id}: продукт создан с id={product.id}")
 
             await self.task_repo.update_status(
                 task_id, status=TaskStatus.completed, product_id=product.id
             )
-        except Exception:
+            print(f"Task {task_id}: статус COMPLETED")
+        except Exception as e:
+            print(f"Task {task_id}: ошибка при финализации анализа: {e}")
+            import traceback
+            traceback.print_exc()
             await self.task_repo.update_status(task_id, status=TaskStatus.failed)
+            print(f"Task {task_id}: статус FAILED поставлен")
 
     async def get_user_tasks(self, user_id: int) -> List[STask]:
         tasks = await self.task_repo.get_by_user_id(user_id)
-        return [STask.model_validate(task) for task in tasks]
+        result = []
+        
+        for task in tasks:
+            task_dict = {
+                "id": task.id,
+                "ozon_id": task.ozon_id,
+                "status": task.status,
+                "product_id": task.product_id,
+                "user_id": task.user_id,
+                "retry_count": task.retry_count,
+                "review_count": task.review_count,
+                "product_name": None,
+                "product_price": None,
+                "product_score": None,
+            }
+            
+            # Если есть связанный продукт, загружаем его данные напрямую из репозитория
+            if task.product_id:
+                from app.repositories import ProductRepository
+                product_repo = ProductRepository(self.db)
+                try:
+                    # Загружаем продукт с его метриками для расчёта score
+                    product = await product_repo.get_by_product_id_full(task.product_id)
+                    if product:
+                        task_dict["product_name"] = product.name
+                        task_dict["product_price"] = product.price
+                        # Вычисляем score из метрик
+                        if product.product_metrics:
+                            total_score = sum(pm.score for pm in product.product_metrics)
+                            task_dict["product_score"] = total_score / len(product.product_metrics) / 10
+                except Exception as e:
+                    # Логируем ошибку, но продолжаем работу
+                    print(f"Error loading product {task.product_id}: {e}")
+            
+            result.append(STask(**task_dict))
+        
+        return result
 
     async def process_stale_fetching_tasks(self) -> None:
         """Сбрасывает застрявшие fetching задачи: retry++, pending, clear worker. При 3-й попытке — failed + refund."""
@@ -176,7 +266,7 @@ class TaskService:
             if not current or current.status != TaskStatus.fetching:
                 continue
             new_retry = await self.task_repo.increment_retry(task.id)
-            if new_retry >= 3:
+            if new_retry > 3:
                 await self.task_repo.update_status(task.id, TaskStatus.failed, clear_worker=True)
                 user_service = UserService(self.db)
                 await user_service.refund_balance(task.user_id)

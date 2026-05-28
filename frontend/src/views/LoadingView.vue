@@ -12,7 +12,7 @@ const checkStatus = async () => {
     const res = await api.get(`/products/check/${props.id}`);
     if (res.data.exists) {
       clearInterval(timer);
-      router.push(`/product/${props.id}`);
+      router.push(`/product/unknown/${props.id}`);
     }
   } catch (e) {
     console.error("Ошибка опроса статуса");

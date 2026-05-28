@@ -32,8 +32,16 @@ class ProductService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         products = await self.product_repo.get_all_versions(ozon_id)
 
+        product_ids = [p.id for p in products]
+        review_counts = await self.product_repo.get_latest_task_review_counts(product_ids)
+
         versions = [
-            SProductVersion(id=p.id, date_added=p.date_added)
+            SProductVersion(
+                id=p.id,
+                ozon_id=p.ozon_id,
+                date_added=p.date_added,
+                review_count=review_counts.get(p.id, 0)
+            )
             for p in products
         ]
 
@@ -143,7 +151,10 @@ class ProductService:
             except Exception as e:
                 print(f"Ошибка кастомной метрики {pm.metric.name}: {e}")
 
-        return await self.product_repo.save_all(product)
+        product = await self.product_repo.save_all(product)
+        # Avoid accessing lazy-loaded relationships after commit to prevent MissingGreenlet errors
+        print(f"Продукт сохранён: ozon_id={ozon_id}, product.id={product.id}")
+        return product
     async def delete_product(self, product_id: int, user: Optional[User]) -> dict:
         """Удалить товар и все связанные данные (только для администраторов)."""
         if not user:

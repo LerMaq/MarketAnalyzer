@@ -31,8 +31,9 @@ async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text(SQL_CREATE_FUNCTION))
-        await conn.execute(text(SQL_DROP_TRIGGER))
         await conn.execute(text(SQL_CREATE_TRIGGER))
+        await conn.execute(text(SQL_CREATE_UPDATED_AT_FUNCTION))
+        await conn.execute(text(SQL_CREATE_UPDATED_AT_TRIGGER))
 
 async def delete_tables():
     async with engine.begin() as conn:
@@ -53,10 +54,45 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
-SQL_DROP_TRIGGER = "DROP TRIGGER IF EXISTS trigger_new_task ON tasks;"
-
 SQL_CREATE_TRIGGER = """
-CREATE TRIGGER trigger_new_task
-AFTER INSERT OR UPDATE ON tasks
-FOR EACH ROW EXECUTE FUNCTION notify_new_task();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgname = 'trigger_new_task'
+      AND tgrelid = 'tasks'::regclass
+  ) THEN
+    CREATE TRIGGER trigger_new_task
+    AFTER INSERT OR UPDATE ON tasks
+    FOR EACH ROW EXECUTE FUNCTION notify_new_task();
+  END IF;
+END;
+$$;
+"""
+
+SQL_CREATE_UPDATED_AT_FUNCTION = """
+CREATE OR REPLACE FUNCTION set_task_updated_at() RETURNS trigger AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+SQL_CREATE_UPDATED_AT_TRIGGER = """
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgname = 'trigger_set_task_updated_at'
+      AND tgrelid = 'tasks'::regclass
+  ) THEN
+    CREATE TRIGGER trigger_set_task_updated_at
+    BEFORE UPDATE ON tasks
+    FOR EACH ROW EXECUTE FUNCTION set_task_updated_at();
+  END IF;
+END;
+$$;
 """

@@ -1,4 +1,4 @@
-﻿from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, bindparam
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models.product import Product, Metric
@@ -40,6 +40,23 @@ class ProductRepository:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def get_latest_task_review_counts(self, product_ids: list[int]) -> dict[int, int]:
+        if not product_ids:
+            return {}
+
+        query = (
+            select(Task.product_id, Task.review_count)
+            .where(Task.product_id.in_(product_ids))
+            .order_by(Task.product_id, Task.created_at.desc())
+        )
+        result = await self.db.execute(query)
+
+        counts: dict[int, int] = {}
+        for product_id, review_count in result:
+            if product_id not in counts:
+                counts[product_id] = review_count
+        return counts
+
     async def get_full_by_id(self, product_id: int) -> Optional[Product]:
         query = (
             select(Product)
@@ -76,7 +93,7 @@ class ProductRepository:
         return result.scalars().first()
 
     async def save_all(self, product: Product):
-        """РЎРѕС…СЂР°РЅСЏРµС‚ РїСЂРѕРґСѓРєС‚ Рё РІСЃРµ СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ РЅРёРј РѕР±СЉРµРєС‚С‹ (summary, metrics, etc.)"""
+        """Сохраняет продукт и все связанные с ним объекты (summary, metrics, etc.)"""
         self.db.add(product)
         await self.db.commit()
         await self.db.refresh(product)
@@ -85,17 +102,6 @@ class ProductRepository:
     async def get_standard_metrics(self) -> List[Metric]:
         """Все метрики с is_custom=False"""
         query = select(Metric).where(Metric.is_custom == False)
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
-    async def get_random_custom_metrics(self, limit: int = 30) -> List[Metric]:
-        """Случайные метрики с is_custom=True"""
-        query = (
-            select(Metric)
-            .where(Metric.is_custom == True)
-            .order_by(func.random())
-            .limit(limit)
-        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -118,5 +124,69 @@ class ProductRepository:
         """Удалить товар и сохранить изменения."""
         await self.db.delete(product)
         await self.db.commit()
+
+    async def update_metric_embedding(self, metric_id: int, embedding: List[float]) -> None:
+        """Обновить векторное представление метрики"""
+        query = select(Metric).where(Metric.id == metric_id)
+        result = await self.db.execute(query)
+        metric = result.scalar_one_or_none()
+
+        if metric:
+            metric.embedding = embedding
+            await self.db.commit()
+            await self.db.refresh(metric)
+
+    async def get_metrics_with_similarity(self, query_vector: List[float], limit: int = 40) -> List[dict]:
+        """
+        Векторный поиск кастомных метрик с вычислением similarity score.
+        Возвращает список словарей с метрикой и её оценкой схожести.
+        """
+        query_vector_param = bindparam("query_vector", query_vector, type_=Metric.embedding.type)
+        distance_expr = Metric.embedding.cosine_distance(query_vector_param)
+        similarity_expr = (1 - distance_expr)
+
+        query = (
+            select(
+                Metric.id,
+                Metric.name,
+                Metric.description,
+                Metric.weight,
+                Metric.is_custom,
+                similarity_expr.label("similarity")
+            )
+            .where(Metric.is_custom == True, Metric.embedding.is_not(None))
+            .order_by(distance_expr)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        rows = result.fetchall()
+
+        metrics_with_scores = []
+        for row in rows:
+            metric = Metric(
+                id=row.id,
+                name=row.name,
+                description=row.description,
+                weight=row.weight,
+                is_custom=row.is_custom
+            )
+            metrics_with_scores.append({
+                "metric": metric,
+                "score": float(row.similarity)
+            })
+
+        return metrics_with_scores
+
+    async def get_metrics_without_embeddings(self, limit: int = 100) -> List[Metric]:
+        """Получить метрики без векторных представлений для генерации эмбеддингов"""
+        query = (
+            select(Metric)
+            .where(Metric.embedding.is_(None))
+            .limit(limit)
+            .order_by(Metric.id.desc())
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 
 

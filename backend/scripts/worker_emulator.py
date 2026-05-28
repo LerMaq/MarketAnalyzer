@@ -9,7 +9,7 @@ async def worker_send_data():
     # 1. Сбор метаданных
     base_url = input("Введите Base URL (по умолчанию http://localhost:8000): ").strip() or "http://localhost:8000"
     task_id = input("Введите task_id: ").strip()
-    token = input("Введите ваш токен (без Bearer): ").strip()
+    token = input("Введите worker token (X-Worker-Token): ").strip()
 
     if not task_id or not token:
         print("Ошибка: task_id и токен обязательны!")
@@ -28,7 +28,7 @@ async def worker_send_data():
     # 3. Подготовка запроса
     url = f"{base_url}/tasks/complete/{task_id}"
     headers = {
-        "Authorization": f"Bearer {token}",
+        "X-Worker-Token": token,
         "Content-Type": "application/json"
     }
     # Мы передаем словарь в параметр json, httpx сам корректно его сериализует

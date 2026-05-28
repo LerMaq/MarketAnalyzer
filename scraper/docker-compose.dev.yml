@@ -1,0 +1,13 @@
+services:
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: marketanalyzer-scraper:dev
+    container_name: marketanalyzer-scraper-dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    shm_size: "1gb"
+    ports:
+      - "127.0.0.1:5901:5901"

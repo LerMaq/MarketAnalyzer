@@ -2,8 +2,9 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_current_worker
 from app.models.user import User
+from app.models.worker import Worker
 from app.schemas.task import STask, STaskAdd, STaskAddedResponse, STaskWorkerTake, STaskWorkerData
 from app.services.task_service import TaskService
 
@@ -17,7 +18,7 @@ async def add_task(
 ):
     service = TaskService(db)
     # Передаем юзера в сервис для проверки лимитов task.analysis
-    return await service.add_new_task(data.url_or_id, user)
+    return await service.add_new_task(data.url_or_id, user, data.review_count)
 
 @router.get("/status/{task_id}", response_model=STask)
 async def get_status(task_id: int, db: AsyncSession = Depends(get_db)):
@@ -28,11 +29,10 @@ async def get_status(task_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/take", response_model=Optional[STaskWorkerTake])
 async def worker_take(
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_current_user)
+    worker: Optional[Worker] = Depends(get_current_worker),
 ):
     service = TaskService(db)
-    # Внутри сервиса проверим право task.worker
-    return await service.take_task_for_worker(user)
+    return await service.take_task_for_worker(worker)
 
 @router.post("/complete/{task_id}")
 async def worker_complete(
@@ -40,11 +40,10 @@ async def worker_complete(
     data: STaskWorkerData,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_current_user)
+    worker: Optional[Worker] = Depends(get_current_worker),
 ):
     service = TaskService(db)
-    await service.verify_worker_access(user)
-    return await service.process_worker_complete(task_id, data, background_tasks, user)
+    return await service.process_worker_complete(task_id, data, background_tasks, worker)
 
 @router.get("/my", response_model=List[STask])
 async def get_my_tasks(

@@ -2,13 +2,18 @@ import { ref } from 'vue'
 import api from './api/client'
 
 const user = ref(null)
+const isLoading = ref(false)
 
 async function loadUser() {
+  if (isLoading.value) return
+  isLoading.value = true
   try {
     const res = await api.get('/user/me')
     user.value = res.data
   } catch (e) {
     user.value = null
+  } finally {
+    isLoading.value = false
   }
 }
 

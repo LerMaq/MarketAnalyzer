@@ -1,0 +1,57 @@
+name: Build, publish and deploy backend
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+    tags:
+      - "backend-v*"
+  workflow_dispatch:
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare Docker tags
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/backend-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/backend-v}"
+            echo "tags=lermak/marketanalyzer-backend:$VERSION,lermak/marketanalyzer-backend:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=lermak/marketanalyzer-backend:latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Deploy backend to server
+        if: ${{ vars.BACKEND_DEPLOY_ENABLED == 'true' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/backend-v')) }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.BACKEND_SERVER_HOST }}
+          username: ${{ secrets.BACKEND_SERVER_USER }}
+          key: ${{ secrets.BACKEND_SERVER_SSH_KEY }}
+          script: |
+            cd /opt/marketanalyzer-backend
+            docker compose pull
+            docker compose up -d
+            docker image prune -f

@@ -21,6 +21,7 @@ class SAiAnalysisProduct(BaseModel):
     name: str
     description: str
     price: float
+    thinking: str = Field(..., description="Анализ предоставленных кастомных метрик: почему выбраны одни и отброшены другие")
     ai_summary: SAiSummaryBase
     product_metrics_standard: List[SAiProductMetricLink] = []
     product_metrics_custom: List[SAiProductMetricLink] = []

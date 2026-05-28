@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Response
 from sqlalchemy import select
 
@@ -48,7 +48,7 @@ class AuthService:
 
     async def _create_session_flow(self, response: Response, user_id: int, ua: str, ip: str) -> SAuthResponse:
         token = generate_session_token()
-        expires = datetime.utcnow() + timedelta(days=30)
+        expires = datetime.now(timezone.utc) + timedelta(days=30)
 
         await self.repo.create_session({
             "user_id": user_id,

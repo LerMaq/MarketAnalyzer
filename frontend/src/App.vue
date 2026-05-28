@@ -1,17 +1,18 @@
 <template>
   <div class="app-wrapper">
     <header class="header">
-      <div class="logo" @click="$router.push('/')">
-        <div class="logo img">
+      <router-link to="/" class="logo" @click="handleLogoClick">
+        <div class="logo-image">
           <img src="\logo market_analyzer.png" alt="Ozon AI Logo">
         </div>
         Ozon<span>AI</span>
-      </div>
+      </router-link>
 
       <!-- Десктопная навигация -->
       <nav class="nav">
         <template v-if="isAuthenticated">
           <button class="link-btn" @click="$router.push('/tariffs')">Тарифы</button>
+          <button class="link-btn" @click="$router.push('/history')">История</button>
           <button class="link-btn" @click="$router.push('/profile')">Профиль</button>
           <button class="link-btn" @click="logout">Выйти</button>
         </template>
@@ -38,6 +39,7 @@
     <nav class="mobile-nav" :class="{ active: isMobileMenuOpen }">
       <template v-if="isAuthenticated">
         <button class="link-btn" @click="navigateTo('/tariffs'); toggleMobileMenu()">Тарифы</button>
+        <button class="link-btn" @click="navigateTo('/history'); toggleMobileMenu()">История</button>
         <button class="link-btn" @click="navigateTo('/profile'); toggleMobileMenu()">Профиль</button>
         <button class="link-btn" @click="logoutAndCloseMenu">Выйти</button>
       </template>
@@ -76,12 +78,19 @@
 </template>
 
 <script setup>
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, computed, ref, watch } from 'vue'
 import auth from './auth'
-import { useRouter } from 'vue-router'
-import { initTracker, notifications, dismissNotification } from './analysisTracker'
+import { useRouter, useRoute } from 'vue-router'
+import {
+  initTracker,
+  notifications,
+  navigationRequests,
+  dismissNotification,
+  consumeNavigationRequest
+} from './analysisTracker'
 
 const router = useRouter()
+const route = useRoute()
 const isMobileMenuOpen = ref(false)
 
 onMounted(() => {
@@ -97,6 +106,13 @@ const navigateTo = (path) => {
   router.push(path)
 }
 
+const handleLogoClick = (event) => {
+  if (route.path === '/') {
+    event.preventDefault()
+    window.location.reload()
+  }
+}
+
 const logout = async () => {
   await auth.logout()
   window.location.href = '/'
@@ -109,6 +125,7 @@ const logoutAndCloseMenu = async () => {
 
 const isAuthenticated = computed(() => !!auth.user.value)
 const activeNotification = computed(() => notifications.value[0] || null)
+const pendingNavigation = computed(() => navigationRequests.value[0] || null)
 
 const handleNotificationAction = (notification) => {
   if (notification?.actionPath) {
@@ -116,6 +133,16 @@ const handleNotificationAction = (notification) => {
     dismissNotification(notification.id)
   }
 }
+
+watch(pendingNavigation, async (request) => {
+  if (!request?.path) return
+
+  try {
+    await router.push(request.path)
+  } finally {
+    consumeNavigationRequest(request.id)
+  }
+})
 </script>
 
 <style>
@@ -169,6 +196,7 @@ html, body {
   color: #005bff;
   cursor: pointer;
   align-items: center;
+  text-decoration: none;
 }
 
 .logo img {

@@ -21,8 +21,7 @@ class User(Base):
     def active_permissions(self) -> set[str]:
         """Возвращает набор активных прав пользователя."""
         active_perms = set()
-        # expires_at хранится как naive (TIMESTAMP WITHOUT TIME ZONE)
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         for ur in self.user_ranks:
             if ur.expires_at is None or ur.expires_at > now:
@@ -34,8 +33,7 @@ class User(Base):
     def daily_limits(self) -> dict:
         """Находит максимальные лимиты среди всех ролей пользователя."""
         limits = {"analysis": 0, "chat": 0}
-        # expires_at хранится как naive (TIMESTAMP WITHOUT TIME ZONE)
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         for ur in self.user_ranks:
             if ur.expires_at is None or ur.expires_at > now:
@@ -56,7 +54,7 @@ class UserRank(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     rank_id: Mapped[int] = mapped_column(ForeignKey("ranks.id"))
-    expires_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="user_ranks")
     rank: Mapped["Rank"] = relationship(back_populates="user_ranks")
@@ -126,8 +124,8 @@ class Session(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(default=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(255))
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))

@@ -9,15 +9,15 @@
         <h3 class="card-title">Бесплатно</h3>
         <dl class="params">
           <div class="param-row">
-            <dt>Количество анализов товаров</dt>
+            <dt>Анализов товаров</dt>
             <dd>5 / день</dd>
           </div>
           <div class="param-row">
-            <dt>Количество сообщений ИИ ассистенту</dt>
+            <dt>Сообщений ИИ ассистенту</dt>
             <dd>15 / день</dd>
           </div>
           <div class="param-row">
-            <dt>Возможность выбирать ИИ модели</dt>
+            <dt>Выбор ИИ модели</dt>
             <dd>нет</dd>
           </div>
           <div class="param-row">
@@ -38,15 +38,15 @@
         <h3 class="card-title accent">Премиум</h3>
         <dl class="params">
           <div class="param-row">
-            <dt>Количество анализов товаров</dt>
+            <dt>Анализов товаров</dt>
             <dd>10 / день</dd>
           </div>
           <div class="param-row">
-            <dt>Количество сообщений ИИ ассистенту</dt>
+            <dt>Сообщений ИИ ассистенту</dt>
             <dd>100 / день</dd>
           </div>
           <div class="param-row">
-            <dt>Возможность выбирать ИИ модели</dt>
+            <dt>Выбор ИИ модели</dt>
             <dd>да</dd>
           </div>
           <div class="param-row">
@@ -239,7 +239,8 @@ onMounted(loadProfile)
 .param-row dt {
   margin: 0;
   color: #333;
-  flex-shrink: 0;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .param-row dd {
@@ -248,6 +249,8 @@ onMounted(loadProfile)
   font-weight: normal;
   text-align: right;
   flex-shrink: 0;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* Адаптивность для очень узких экранов */
@@ -275,13 +278,13 @@ onMounted(loadProfile)
   }
   
   .param-row {
-    flex-direction: column;
+    flex-direction: row;
     gap: 4px;
     align-items: flex-start;
   }
   
   .param-row dd {
-    text-align: left;
+    text-align: right;
   }
   
   .modal {

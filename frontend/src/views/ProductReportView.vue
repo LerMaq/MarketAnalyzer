@@ -8,7 +8,7 @@
     <div v-if="product" class="report-container fade-in">
       <header class="report-header">
         <div class="header-row buttons-row">
-          <button @click="$router.push('/')" class="back-btn">← К поиску</button>
+          <button @click="goBack" class="back-btn">← Назад</button>
           <button 
             v-if="isAdmin" 
             @click="confirmDeleteReport" 
@@ -25,7 +25,24 @@
         </div>
         <div class="title-section">
           <h1>{{ product.name }}</h1>
-          <span class="sku">Артикул: {{ article }}</span>
+          <div class="sku-row">
+            <span class="sku-label">Артикул:</span>
+            <a
+              v-if="ozonProductUrl"
+              :href="ozonProductUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ozon-link"
+            >
+              {{ reportArticle }}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+            <span v-else class="sku-value">—</span>
+          </div>
         </div>
       </header>
 
@@ -217,7 +234,7 @@
     </Transition>
 
     <Transition name="fade">
-      <div v-if="showDeleteReportConfirm" class="modal-overlay">
+      <div v-if="showDeleteReportConfirm" class="modal-overlay" @click.self="cancelDeleteReport">
         <div class="modal-content delete-confirm-modal">
           <button @click="cancelDeleteReport" class="close-modal modal-close-big">&times;</button>
           <header class="modal-header">
@@ -237,7 +254,7 @@
     </Transition>
 
     <Transition name="fade">
-      <div v-if="showDeleteConfirm" class="modal-overlay">
+      <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDeleteKey">
         <div class="modal-content delete-confirm-modal">
           <button @click="cancelDeleteKey" class="close-modal modal-close-big">&times;</button>
           <header class="modal-header">
@@ -257,7 +274,7 @@
     </Transition>
 
     <Transition name="fade">
-      <div v-if="showAddKeyModal" class="modal-overlay">
+      <div v-if="showAddKeyModal" class="modal-overlay" @click.self="closeAddKeyModal">
         <div class="modal-content">
           <button @click="closeAddKeyModal" class="close-modal modal-close-big">&times;</button>
           <header class="modal-header">
@@ -295,11 +312,13 @@
 
 <script setup>
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../api/client'
 import auth from '../auth'
 import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({ breaks: true, linkify: true })
+const router = useRouter()
 const props = defineProps(['article', 'id'])
 const product = ref(null)
 const isLoading = ref(true)
@@ -334,6 +353,26 @@ const showDeleteReportConfirm = ref(false)
 const deleteReportId = ref(null)
 
 const isAuthenticated = computed(() => !!auth.user.value)
+const normalizeArticle = (value) => {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized === 'unknown') return null
+  return normalized
+}
+
+const reportArticle = computed(() => {
+  return (
+    normalizeArticle(product.value?.ozon_id) ||
+    normalizeArticle(product.value?.article) ||
+    normalizeArticle(product.value?.product_ozon_id) ||
+    normalizeArticle(props.article)
+  )
+})
+
+const ozonProductUrl = computed(() => {
+  return reportArticle.value ? `https://www.ozon.ru/product/${reportArticle.value}` : null
+})
+
 const isAdmin = computed(() => {
   if (!auth.user.value) return false
   return auth.user.value.permissions?.includes('admin.panel') || false
@@ -437,6 +476,16 @@ const startNewChat = () => {
   messages.value = []
   isChatsMenuOpen.value = false
   chatError.value = ''
+}
+
+const goBack = () => {
+  // Проверяем, есть ли история навигации
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    // Если истории нет, переходим на главную
+    router.push('/')
+  }
 }
 
 onMounted(async () => {
@@ -759,9 +808,40 @@ const sendMessage = async () => {
   line-height: 1.2;
 }
 
-.sku {
+.sku-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sku-label {
   color: #888;
   font-size: 0.9rem;
+}
+
+.sku-value {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.ozon-link {
+  color: #005bff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.ozon-link:hover {
+  color: #0047cc;
+  text-decoration: underline;
+}
+
+.ozon-link svg {
+  flex-shrink: 0;
 }
 
 .delete-report-btn {
@@ -1121,6 +1201,7 @@ const sendMessage = async () => {
   top: 10px;
   right: 20px;
   font-size: 28px;
+  line-height: 1;
   background: none;
   border: none;
   cursor: pointer;
@@ -1144,19 +1225,22 @@ const sendMessage = async () => {
 
 .modal-content {
   background: white;
-  border-radius: 12px;
-  max-width: 500px;
+  border-radius: 20px;
   width: 90%;
+  max-width: 500px;
   max-height: 80vh;
+  padding: 30px;
+  position: relative;
   overflow-y: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  margin-bottom: 20px;
+  padding: 0 40px 15px 0;
   border-bottom: 1px solid #eee;
 }
 
@@ -1174,7 +1258,7 @@ const sendMessage = async () => {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 0;
 }
 
 .form-group {
@@ -1528,4 +1612,41 @@ const sendMessage = async () => {
   margin-top: 4px;
   padding: 0 4px;
 }
+.modal-body .info-section {
+  margin-bottom: 24px;
+}
+
+.modal-body .info-section h4 {
+  margin: 0 0 12px;
+  color: #005bff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.modal-body .info-section p {
+  margin: 0;
+  color: #444;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.modal-score-bar {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid #eee;
+}
+
+.modal-score-bar span {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.modal-score-bar .m-bar {
+  margin-bottom: 0;
+}
+
 </style>

@@ -30,8 +30,8 @@
       <router-link to="/tariffs" class="link-tariffs">Сменить тариф →</router-link>
     </section>
 
-    <!-- Админ-панель (только для администраторов) -->
-    <AdminPanel v-if="isAdmin" />
+    <!-- Админ-панель (для админов и модераторов с правом worker.manage) -->
+    <AdminPanel v-if="canSeeAdminPanel" :permissions="profile?.permissions || []" />
 
     <section class="card">
       <h3>Основные данные</h3>
@@ -66,25 +66,6 @@
       </div>
       <div class="actions">
         <button @click="changePassword">Сменить пароль</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>История персональных запросов на анализ товаров</h3>
-      <div v-if="tasks.length === 0" class="no-tasks">
-        У вас пока нет запросов на анализ.
-      </div>
-      <div v-else class="tasks-list">
-        <div v-for="task in tasks" :key="task.id" class="task-item">
-          <div class="task-info">
-            <span class="task-id">Задача #{{ task.id }}</span>
-            <span class="ozon-id">Ozon ID: {{ task.ozon_id }}</span>
-            <span class="status" :class="task.status">{{ getStatusText(task.status) }}</span>
-          </div>
-            <div v-if="task.product_id" class="task-actions">
-              <button @click="viewReport(task.ozon_id, task.product_id)">Посмотреть отчет</button>
-            </div>
-        </div>
       </div>
     </section>
 
@@ -128,22 +109,23 @@ import AdminPanel from '../components/admin/AdminPanel.vue'
 const name = ref('')
 const oldPassword = ref('')
 const newPassword = ref('')
-const tasks = ref([])
 const profile = ref(null)
 const isLoading = ref(true)
 
 const showOldPassword = ref(false)
 const showNewPassword = ref(false)
 const showDeleteModal = ref(false)
-const isAdmin = ref(false)
+
+const canSeeAdminPanel = computed(() => {
+  const perms = profile.value?.permissions || []
+  return perms.includes('admin.panel') || perms.includes('worker.manage')
+})
 
 const loadProfile = async () => {
   try {
     const res = await api.get('/user/me')
     profile.value = res.data
     name.value = res.data.name || ''
-    // Проверяем права администратора на основе permissions из ответа
-    isAdmin.value = res.data.permissions?.includes('admin.panel') || false
   } catch (e) {
     console.error('Ошибка загрузки профиля', e)
   }
@@ -175,15 +157,6 @@ const chatProgress = computed(() => {
   return Math.min(100, (used / lim) * 100)
 })
 
-const loadTasks = async () => {
-  try {
-    const res = await api.get('/tasks/my')
-    tasks.value = res.data
-  } catch (e) {
-    console.error('Ошибка загрузки задач', e)
-  }
-}
-
 const updateName = async () => {
   try {
     const res = await api.put('/user/me', { name: name.value })
@@ -207,24 +180,9 @@ const changePassword = async () => {
   }
 }
 
-const getStatusText = (status) => {
-  const statuses = {
-    pending: 'Ожидает',
-    fetching: 'Сбор данных',
-    processing: 'В обработке',
-    completed: 'Завершена',
-    failed: 'Ошибка'
-  }
-  return statuses[status] || status
-}
-
-const viewReport = (ozonId, productId) => {
-  router.push(`/product/${ozonId}/${productId}`)
-}
-
 onMounted(async () => {
   try {
-    await Promise.all([loadProfile(), loadTasks()])
+    await loadProfile()
   } catch (e) {
     console.error('Ошибка загрузки данных профиля:', e)
   } finally {
@@ -427,86 +385,6 @@ button:hover {
 
 .delete-btn:hover {
   background: #c82333;
-}
-
-.no-tasks {
-  text-align: center;
-  color: #666;
-  font-style: italic;
-  padding: 20px;
-}
-
-.tasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.task-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: #f9f9f9;
-}
-
-.task-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.task-id {
-  font-weight: bold;
-  color: #333;
-}
-
-.ozon-id {
-  color: #666;
-  font-size: 0.9em;
-}
-
-.status {
-  font-size: 0.9em;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
-.status.pending {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.status.fetching {
-  background: #cce5ff;
-  color: #004085;
-}
-
-.status.processing {
-  background: #cce5ff;
-  color: #004085;
-}
-
-.status.failed {
-  background: #f8d7da;
-  color: #721c24;
-}
-
-.status.completed {
-  background: #d4edda;
-  color: #155724;
-}
-
-.task-actions button {
-  background: #28a745;
-}
-
-.task-actions button:hover {
-  background: #218838;
 }
 
 .modal-overlay {
