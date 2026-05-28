@@ -665,7 +665,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import api from '@/api/client'
 import auth from '@/auth'
 
@@ -688,14 +688,17 @@ const error = ref(null)
 
 // Данные метрик
 const metrics = ref([])
+const metricsLoaded = ref(false)
 const editingMetricId = ref(null)
 const editMetricForm = ref({ name: '', description: '', weight: 1.0 })
 
 // Данные пользователей
 const users = ref([])
+const usersLoaded = ref(false)
 const currentUserId = ref(null)
 const searchQuery = ref('')
 const allRanks = ref([])
+const ranksLoaded = ref(false)
 const selectedUserRanks = ref(null) // null = не выбран, [] = выбранный список рангов
 const selectedUserStats = ref(null) // { analysis: 0, chat: 0 }
 const selectedUserName = ref('')
@@ -703,6 +706,7 @@ const newRankName = ref('')
 
 // Данные воркеров
 const workers = ref([])
+const workersLoaded = ref(false)
 const newWorkerName = ref('')
 const newTokenInfo = ref(null)
 const revealedTokens = ref({})
@@ -712,6 +716,7 @@ const editWorkerForm = ref({ name: '' })
 // Данные ИИ
 const aiConfigs = ref([])
 const aiKeys = ref([])
+const aiLoaded = ref(false)
 const showAddConfig = ref(false)
 const newConfigForm = ref({
   name: '',
@@ -751,6 +756,7 @@ const loadMetrics = async () => {
     const res = await api.get('/admin/metrics')
     // сортируем метрики по id по возрастанию для стабильного отображения
     metrics.value = [...res.data].sort((a, b) => (a.id || 0) - (b.id || 0))
+    metricsLoaded.value = true
   } catch (e) {
     console.error('Ошибка загрузки метрик', e)
     error.value = e.response?.data?.detail || 'Ошибка загрузки метрик'
@@ -766,6 +772,7 @@ const loadUsers = async () => {
     error.value = null
     const res = await api.get('/admin/users')
     users.value = res.data
+    usersLoaded.value = true
   } catch (e) {
     console.error('Ошибка загрузки пользователей', e)
     error.value = e.response?.data?.detail || 'Ошибка загрузки пользователей'
@@ -779,6 +786,7 @@ const loadRanks = async () => {
   try {
     const res = await api.get('/admin/ranks')
     allRanks.value = res.data
+    ranksLoaded.value = true
   } catch (e) {
     console.error('Ошибка загрузки рангов', e)
   }
@@ -876,6 +884,7 @@ const loadWorkers = async () => {
     error.value = null
     const res = await api.get('/admin/workers')
     workers.value = res.data
+    workersLoaded.value = true
   } catch (e) {
     console.error('Ошибка загрузки воркеров', e)
     error.value = e.response?.data?.detail || 'Ошибка загрузки воркеров'
@@ -1063,6 +1072,7 @@ const loadAiData = async () => {
     ])
     aiConfigs.value = configsRes.data
     aiKeys.value = keysRes.data
+    aiLoaded.value = true
   } catch (e) {
     console.error('Ошибка загрузки данных ИИ', e)
     error.value = e.response?.data?.detail || 'Ошибка загрузки данных ИИ'
@@ -1320,17 +1330,50 @@ const formatDate = (dateStr) => {
 }
 
 // Повторная загрузка
-const retryLoad = () => {
+const retryLoad = async () => {
   if (activeTab.value === 'metrics') {
-    loadMetrics()
+    metricsLoaded.value = false
   } else if (activeTab.value === 'users') {
-    loadUsers()
+    usersLoaded.value = false
+    ranksLoaded.value = false
   } else if (activeTab.value === 'workers') {
-    loadWorkers()
+    workersLoaded.value = false
   } else {
-    loadAiData()
+    aiLoaded.value = false
+  }
+
+  await ensureTabData(activeTab.value)
+}
+
+const ensureTabData = async (tab = activeTab.value) => {
+  if (tab === 'metrics' && canSeeAll.value && !metricsLoaded.value) {
+    await loadMetrics()
+    return
+  }
+
+  if (tab === 'users' && canSeeAll.value) {
+    if (!usersLoaded.value) {
+      await loadUsers()
+    }
+    if (!ranksLoaded.value) {
+      await loadRanks()
+    }
+    return
+  }
+
+  if (tab === 'workers' && canManageWorkers.value && !workersLoaded.value) {
+    await loadWorkers()
+    return
+  }
+
+  if (tab === 'ai' && canSeeAll.value && !aiLoaded.value) {
+    await loadAiData()
   }
 }
+
+watch(activeTab, (tab) => {
+  void ensureTabData(tab)
+})
 
 onMounted(async () => {
   try {
@@ -1341,25 +1384,7 @@ onMounted(async () => {
     console.error('Ошибка получения текущего пользователя', e)
   }
 
-  // При первом открытии панели сразу подгружаем данные доступных вкладок,
-  // чтобы не требовать нажатия на "Обновить"
-  isLoading.value = true
-  error.value = null
-  try {
-    const promises = []
-    if (canSeeAll.value) {
-      promises.push(loadMetrics(), loadAiData(), loadRanks())
-    }
-    if (canSeeAll.value || canManageWorkers.value) {
-      promises.push(loadUsers())
-    }
-    if (canManageWorkers.value) {
-      promises.push(loadWorkers())
-    }
-    await Promise.all(promises)
-  } finally {
-    isLoading.value = false
-  }
+  await ensureTabData(activeTab.value)
 })
 </script>
 
@@ -2503,9 +2528,4 @@ input:checked + .toggle-slider:before {
   100% { transform: rotate(360deg); }
 }
 </style>
-
-
-
-
-
 
