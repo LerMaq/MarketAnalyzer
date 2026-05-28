@@ -20,6 +20,7 @@ services:
       - "traefik.http.routers.market-api.middlewares=api-strip"
       
       - "traefik.http.services.market-api.loadbalancer.server.port=8000"
+      - "traefik.docker.network=traefik-public"
 
 networks:
   traefik-public:

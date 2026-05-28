@@ -169,7 +169,7 @@ class TaskService:
             }
 
         report_text = worker_data.raw_content
-        if len(report_text) < 5000:
+        if len(report_text) < 3000:
             retry_count = await self.task_repo.increment_retry(task_id)
             if retry_count < 3:
                 await self.task_repo.update_status(
